@@ -50,7 +50,11 @@ export default function DotoriRoomListScreen({ reviews = [], currentUser, active
       >
         {filtered.length > 0 ? (
           <View style={styles.feedList}>
-            {filtered.map((item) => (
+            {filtered.map((item) => {
+              const isbn = item.bookIsbn ?? item.isbn;
+              const readingBook = readingBooks.find(b => String(b.isbn) === String(isbn));
+              const myCurrentPage = readingBook ? (readingBook.currentPage ?? 0) : Infinity;
+              return (
               <FeedItem
                 key={item.id}
                 id={item.id}
@@ -60,6 +64,7 @@ export default function DotoriRoomListScreen({ reviews = [], currentUser, active
                   : item.user}
                 timeAgo={item.timeAgo}
                 page={item.page}
+                myCurrentPage={myCurrentPage}
                 content={item.content}
                 images={item.images}
                 likes={item.likes}
@@ -71,10 +76,12 @@ export default function DotoriRoomListScreen({ reviews = [], currentUser, active
                 book={getBook(item)}
                 onBookPress={(book) => onBookPress && onBookPress({
                   ...book,
-                  isbn: item.bookIsbn,
+                  isbn,
                   coverImage: book?.cover,
                 })}
               />
+              );
+            })}
             ))}
           </View>
         ) : (
