@@ -37,6 +37,7 @@ import { getUser, getUserBooks, getReadingRecords, getReviews } from './services
 import { Colors, Typography, FontWeights } from './styles';
 import { Spacing, BorderRadius } from './styles/spacing';
 import { fetchBestsellers, fetchNewBooks, fetchBookDetail, CATEGORY_LIST } from './services/aladinApi';
+import { formatTimeAgo } from './utils/formatTimeAgo';
 
 // 웹에서 Min Sans 폰트 로드
 if (Platform.OS === 'web') {
@@ -252,19 +253,26 @@ export default function App() {
     AsyncStorage.setItem('wantToReadBooks', JSON.stringify(wantToReadBooks)).catch(() => {});
   }, [wantToReadBooks]);
 
-  // Load reviews from AsyncStorage
-  React.useEffect(() => {
-    const loadReviews = async () => {
-      try {
-        const stored = await AsyncStorage.getItem('reviews');
-        if (stored) {
-          setReviews(JSON.parse(stored));
-        }
-      } catch (error) {
-        console.error('Error loading reviews:', error);
-      }
+  // Firestore 리뷰 → 앱 형식 변환
+  const normalizeReview = (r) => {
+    const createdAt = r.createdAt?.toDate?.() ? r.createdAt.toDate().toISOString() : (r.createdAt ?? new Date().toISOString());
+    return {
+      ...r,
+      bookIsbn: r.bookIsbn ?? r.isbn,
+      createdAt,
+      timeAgo: formatTimeAgo(createdAt),
+      user: { name: r.userNickname ?? r.user?.name ?? '익명', profileImage: r.user?.profileImage ?? null },
+      likes: Array.isArray(r.likes) ? r.likes : [],
+      comments: r.commentCount ?? (Array.isArray(r.comments) ? r.comments.length : r.comments ?? 0),
+      book: r.book ?? (r.bookTitle ? { title: r.bookTitle, author: r.bookAuthor, cover: r.bookCover } : null),
     };
-    loadReviews();
+  };
+
+  // Load reviews from Firestore
+  React.useEffect(() => {
+    getReviews().then(fbReviews => {
+      if (fbReviews.length > 0) setReviews(fbReviews.map(normalizeReview));
+    }).catch(() => {});
   }, []);
 
   React.useEffect(() => {
@@ -1003,8 +1011,8 @@ export default function App() {
               onScroll={handleFeedScroll}
               onRefresh={async () => {
                 try {
-                  const stored = await AsyncStorage.getItem('reviews');
-                  if (stored) setReviews(JSON.parse(stored));
+                  const fbReviews = await getReviews();
+                  setReviews(fbReviews.map(normalizeReview));
                 } catch (e) {}
               }}
               onBookPress={(book) => {
