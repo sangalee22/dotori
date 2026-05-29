@@ -32,7 +32,8 @@ import MyScreen from './screens/MyScreen';
 import ModalPopup from './components/ModalPopup';
 import SettingIcon from './components/SettingIcon';
 import IconButton from './components/IconButton';
-import { registerUser } from './services/auth';
+import { registerUser, logout as firebaseLogout, onAuthChange } from './services/auth';
+import { getUser, getUserBooks, getReadingRecords, getReviews } from './services/firestore';
 import { Colors, Typography, FontWeights } from './styles';
 import { Spacing, BorderRadius } from './styles/spacing';
 import { fetchBestsellers, fetchNewBooks, fetchBookDetail, CATEGORY_LIST } from './services/aladinApi';
@@ -270,6 +271,38 @@ export default function App() {
     AsyncStorage.getItem('readingRecords').then(stored => {
       if (stored) setReadingRecords(JSON.parse(stored));
     }).catch(() => {});
+  }, []);
+
+  // Firebase Auth 상태 감지 + Firestore 데이터 로드
+  React.useEffect(() => {
+    const unsubscribe = onAuthChange(async (firebaseUser) => {
+      if (firebaseUser) {
+        try {
+          const userData = await getUser(firebaseUser.uid);
+          if (userData) {
+            setCurrentUser({ id: firebaseUser.uid, ...userData });
+            setIsLoggedIn(true);
+            setShowSplash(false);
+
+            // Firestore에서 데이터 로드
+            const [fbReadingBooks, fbWantBooks, fbRecords, fbReviews] = await Promise.all([
+              getUserBooks(firebaseUser.uid, 'reading'),
+              getUserBooks(firebaseUser.uid, 'want'),
+              getReadingRecords(firebaseUser.uid),
+              getReviews(),
+            ]);
+
+            if (fbReadingBooks.length > 0) setReadingBooks(fbReadingBooks);
+            if (fbWantBooks.length > 0) setWantToReadBooks(fbWantBooks);
+            if (fbRecords.length > 0) setReadingRecords(fbRecords);
+            if (fbReviews.length > 0) setReviews(fbReviews);
+          }
+        } catch (e) {
+          console.error('Firebase data load error:', e);
+        }
+      }
+    });
+    return () => unsubscribe();
   }, []);
 
   const handleSaveReadingRecord = React.useCallback(async (record) => {
@@ -646,9 +679,8 @@ export default function App() {
       <SafeAreaProvider>
         <LoginScreen
           onLogin={async (userInfo) => {
-            console.log('Logged in with:', userInfo);
-            const stored = await AsyncStorage.getItem('currentUser');
-            if (stored) setCurrentUser(JSON.parse(stored));
+            const userData = await getUser(userInfo.id);
+            if (userData) setCurrentUser({ id: userInfo.id, ...userData });
             setIsLoggedIn(true);
           }}
           onSignUp={(userInfo) => {
@@ -1033,13 +1065,14 @@ export default function App() {
               showSettings={showMySettings}
               onSettingsClose={() => setShowMySettings(false)}
               onLogout={async () => {
-                await AsyncStorage.removeItem('currentUser');
+                await firebaseLogout();
                 setShowMySettings(false);
                 setActiveBottomTab('home');
                 setIsLoggedIn(false);
                 setShowSplash(true);
               }}
               onWithdraw={async () => {
+                await firebaseLogout();
                 await AsyncStorage.clear();
                 setShowMySettings(false);
                 setActiveBottomTab('home');

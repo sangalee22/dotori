@@ -1,0 +1,146 @@
+import {
+  collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc,
+  query, where, orderBy, limit, onSnapshot, increment, arrayUnion, arrayRemove, serverTimestamp,
+} from 'firebase/firestore';
+import { db } from './firebase';
+
+// ─── Users ───────────────────────────────────────────────────────────────────
+
+export async function getUser(userId) {
+  const snap = await getDoc(doc(db, 'users', userId));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+export async function createUser(userId, data) {
+  await setDoc(doc(db, 'users', userId), {
+    ...data,
+    createdAt: serverTimestamp(),
+  });
+}
+
+export async function updateUser(userId, data) {
+  await updateDoc(doc(db, 'users', userId), data);
+}
+
+export async function checkNickname(nickname) {
+  const q = query(collection(db, 'users'), where('nickname', '==', nickname), limit(1));
+  const snap = await getDocs(q);
+  return snap.empty;
+}
+
+// ─── User Books ───────────────────────────────────────────────────────────────
+
+export async function getUserBooks(userId, status = null) {
+  let q = query(collection(db, 'userBooks'), where('userId', '==', userId));
+  if (status) q = query(q, where('status', '==', status));
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+export async function setUserBook(userId, isbn, data) {
+  const id = `${userId}_${isbn}`;
+  await setDoc(doc(db, 'userBooks', id), {
+    userId,
+    isbn,
+    ...data,
+    updatedAt: serverTimestamp(),
+  }, { merge: true });
+}
+
+export async function removeUserBook(userId, isbn) {
+  await deleteDoc(doc(db, 'userBooks', `${userId}_${isbn}`));
+}
+
+export async function getBookReaderCount(isbn) {
+  const q = query(collection(db, 'userBooks'), where('isbn', '==', isbn), where('status', '==', 'reading'));
+  const snap = await getDocs(q);
+  return snap.size;
+}
+
+// ─── Reading Records ──────────────────────────────────────────────────────────
+
+export async function getReadingRecords(userId) {
+  const q = query(
+    collection(db, 'readingRecords'),
+    where('userId', '==', userId),
+    orderBy('createdAt', 'desc')
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+export async function addReadingRecord(userId, data) {
+  return await addDoc(collection(db, 'readingRecords'), {
+    userId,
+    ...data,
+    createdAt: serverTimestamp(),
+  });
+}
+
+// ─── Reviews ─────────────────────────────────────────────────────────────────
+
+export async function getReviews(roomId = null) {
+  let q = query(collection(db, 'reviews'), orderBy('createdAt', 'desc'), limit(50));
+  if (roomId) q = query(collection(db, 'reviews'), where('roomId', '==', roomId), orderBy('createdAt', 'desc'));
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+export async function addReview(data) {
+  return await addDoc(collection(db, 'reviews'), {
+    ...data,
+    likes: [],
+    createdAt: serverTimestamp(),
+  });
+}
+
+export async function toggleReviewLike(reviewId, userId) {
+  const ref = doc(db, 'reviews', reviewId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return;
+  const likes = snap.data().likes || [];
+  if (likes.includes(userId)) {
+    await updateDoc(ref, { likes: arrayRemove(userId) });
+  } else {
+    await updateDoc(ref, { likes: arrayUnion(userId) });
+  }
+}
+
+// ─── Rooms ────────────────────────────────────────────────────────────────────
+
+export async function getRooms(userId = null) {
+  let q = query(collection(db, 'rooms'), orderBy('createdAt', 'desc'));
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+export async function getRoom(roomId) {
+  const snap = await getDoc(doc(db, 'rooms', roomId));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+export async function createRoom(data) {
+  return await addDoc(collection(db, 'rooms'), {
+    ...data,
+    createdAt: serverTimestamp(),
+  });
+}
+
+export async function joinRoom(roomId, userId) {
+  const id = `${roomId}_${userId}`;
+  await setDoc(doc(db, 'roomParticipants', id), {
+    roomId,
+    userId,
+    currentPage: 0,
+    joinedAt: serverTimestamp(),
+  });
+  await updateDoc(doc(db, 'rooms', roomId), {
+    participantCount: increment(1),
+  });
+}
+
+export async function getRoomParticipants(roomId) {
+  const q = query(collection(db, 'roomParticipants'), where('roomId', '==', roomId));
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
