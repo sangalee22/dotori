@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "dotori-room",
-    "slug": "dotori-room",
+    "name": "dotori",
+    "slug": "dotori",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/appicon.svg",
@@ -13,7 +13,7 @@
       "backgroundColor": "#ffffff"
     },
     "experiments": {
-      "baseUrl": "/dotori-room"
+      "baseUrl": "/dotori"
     },
     "ios": {
       "supportsTablet": true,

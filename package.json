@@ -1,8 +1,8 @@
 {
-  "name": "dotori-room",
+  "name": "dotori",
   "version": "1.0.0",
   "main": "index.js",
-  "homepage": "https://sangalee22.github.io/dotori-room",
+  "homepage": "https://sangalee22.github.io/dotori",
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
