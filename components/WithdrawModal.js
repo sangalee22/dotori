@@ -76,7 +76,7 @@ export default function WithdrawModal({ visible = false, onClose, onWithdraw }) 
         </ScrollView>
 
         <View style={[styles.bottom, { paddingBottom: insets.bottom > 0 ? 0 : Spacing.lg }]}>
-          <Button variant="default" size="xxlarge" onPress={() => onWithdraw?.()} style={styles.btn}>
+          <Button variant="default" size="xxlarge" onPress={() => onWithdraw?.({ reason: selectedReason, detail: selectedReason === 'custom' ? customReason : '' })} style={styles.btn}>
             회원 탈퇴
           </Button>
           <Button variant="primary" size="xxlarge" onPress={onClose} style={styles.btn}>

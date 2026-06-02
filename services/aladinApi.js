@@ -59,7 +59,7 @@ export const CATEGORY_LIST = [
  * @param {string} authorString - 원본 저자 문자열
  * @returns {string} 정리된 저자명
  */
-function cleanAuthorName(authorString) {
+export function cleanAuthorName(authorString) {
   if (!authorString) return '';
 
   // 쉼표로 구분된 첫 번째 저자만 추출

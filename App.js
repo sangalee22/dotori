@@ -32,8 +32,8 @@ import MyScreen from './screens/MyScreen';
 import ModalPopup from './components/ModalPopup';
 import SettingIcon from './components/SettingIcon';
 import IconButton from './components/IconButton';
-import { registerUser, logout as firebaseLogout, onAuthChange } from './services/auth';
-import { getUser, getUserBooks, getReadingRecords, getReviews } from './services/firestore';
+import { registerUser, logout as firebaseLogout, withdrawUser, onAuthChange } from './services/auth';
+import { getUser, getUserBooks, getReadingRecords, getReviews, updateReviewsBookInfo } from './services/firestore';
 import { Colors, Typography, FontWeights } from './styles';
 import { Spacing, BorderRadius } from './styles/spacing';
 import { fetchBestsellers, fetchNewBooks, fetchBookDetail, CATEGORY_LIST } from './services/aladinApi';
@@ -116,6 +116,7 @@ export default function App() {
   const [readingBooks, setReadingBooks] = React.useState([]); // Store books currently being read
   const [wantToReadBooks, setWantToReadBooks] = React.useState([]); // Store books user wants to read
   const [reviews, setReviews] = React.useState([]); // Store all reviews
+  const [bookCache, setBookCache] = React.useState({}); // isbn → {title, author, cover} 전역 캐시
   const [currentUser, setCurrentUser] = React.useState({
     id: 'user_001',
     nickname: 'User name',
@@ -253,6 +254,20 @@ export default function App() {
     AsyncStorage.setItem('wantToReadBooks', JSON.stringify(wantToReadBooks)).catch(() => {});
   }, [wantToReadBooks]);
 
+  // bookCache: AsyncStorage에서 로드
+  React.useEffect(() => {
+    AsyncStorage.getItem('bookCache').then(stored => {
+      if (stored) setBookCache(JSON.parse(stored));
+    }).catch(() => {});
+  }, []);
+
+  // bookCache: 변경 시 AsyncStorage에 저장
+  React.useEffect(() => {
+    if (Object.keys(bookCache).length > 0) {
+      AsyncStorage.setItem('bookCache', JSON.stringify(bookCache)).catch(() => {});
+    }
+  }, [bookCache]);
+
   // Firestore 리뷰 → 앱 형식 변환
   const normalizeReview = (r) => {
     const createdAt = r.createdAt?.toDate?.() ? r.createdAt.toDate().toISOString() : (r.createdAt ?? new Date().toISOString());
@@ -268,11 +283,27 @@ export default function App() {
     };
   };
 
-  // Load reviews from Firestore
+  // Load reviews: AsyncStorage first, then merge with Firestore
   React.useEffect(() => {
-    getReviews().then(fbReviews => {
-      if (fbReviews.length > 0) setReviews(fbReviews.map(normalizeReview));
-    }).catch(() => {});
+    const loadReviews = async () => {
+      try {
+        const stored = await AsyncStorage.getItem('reviews');
+        const local = stored ? JSON.parse(stored) : [];
+        if (local.length > 0) setReviews(local);
+      } catch {}
+      try {
+        const fbReviews = await getReviews();
+        if (fbReviews.length > 0) {
+          const normalized = fbReviews.map(normalizeReview);
+          setReviews(prev => {
+            const fbIds = new Set(normalized.map(r => r.id));
+            const merged = [...normalized, ...prev.filter(r => !fbIds.has(r.id))];
+            return merged.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+          });
+        }
+      } catch {}
+    };
+    loadReviews();
   }, []);
 
   React.useEffect(() => {
@@ -300,10 +331,28 @@ export default function App() {
               getReviews(),
             ]);
 
-            if (fbReadingBooks.length > 0) setReadingBooks(fbReadingBooks);
-            if (fbWantBooks.length > 0) setWantToReadBooks(fbWantBooks);
+            // Firestore 데이터 병합: 로컬(AsyncStorage) 데이터의 coverImage 등 필드 보존
+            if (fbReadingBooks.length > 0) {
+              setReadingBooks(prev => {
+                const localMap = new Map(prev.map(b => [String(b.isbn), b]));
+                return fbReadingBooks.map(fb => ({ ...localMap.get(String(fb.isbn)), ...fb }));
+              });
+            }
+            if (fbWantBooks.length > 0) {
+              setWantToReadBooks(prev => {
+                const localMap = new Map(prev.map(b => [String(b.isbn), b]));
+                return fbWantBooks.map(fb => ({ ...localMap.get(String(fb.isbn)), ...fb }));
+              });
+            }
             if (fbRecords.length > 0) setReadingRecords(fbRecords);
-            if (fbReviews.length > 0) setReviews(fbReviews);
+            if (fbReviews.length > 0) {
+              const normalized = fbReviews.map(normalizeReview);
+              setReviews(prev => {
+                const fbIds = new Set(normalized.map(r => r.id));
+                const merged = [...normalized, ...prev.filter(r => !fbIds.has(r.id))];
+                return merged.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+              });
+            }
           }
         } catch (e) {
           console.error('Firebase data load error:', e);
@@ -661,7 +710,13 @@ export default function App() {
                   // Register user with nickname
                   const userData = await registerUser(signUpUserInfo, signUpNickname);
                   console.log('User registered:', userData);
+                  await AsyncStorage.multiRemove(['readingBooks', 'wantToReadBooks', 'readingRecords', 'reviews']);
+                  setReadingBooks([]);
+                  setWantToReadBooks([]);
+                  setReadingRecords([]);
                   setCurrentUser(userData);
+                  const fbReviews = await getReviews().catch(() => []);
+                  if (fbReviews.length > 0) setReviews(fbReviews.map(normalizeReview));
                   setIsLoggedIn(true);
                   setIsInSignUpFlow(false);
                   setSignUpUserInfo(null);
@@ -687,8 +742,20 @@ export default function App() {
       <SafeAreaProvider>
         <LoginScreen
           onLogin={async (userInfo) => {
-            const userData = await getUser(userInfo.id);
-            if (userData) setCurrentUser({ id: userInfo.id, ...userData });
+            await AsyncStorage.multiRemove(['readingBooks', 'wantToReadBooks', 'readingRecords', 'reviews']);
+            setReadingBooks([]);
+            setWantToReadBooks([]);
+            setReadingRecords([]);
+            const [userData, fbReviews] = await Promise.all([
+              getUser(userInfo.id),
+              getReviews(),
+            ]);
+            if (userData) {
+              const fullUser = { id: userInfo.id, ...userData };
+              setCurrentUser(fullUser);
+              await AsyncStorage.setItem('currentUser', JSON.stringify(fullUser));
+            }
+            if (fbReviews.length > 0) setReviews(fbReviews.map(normalizeReview));
             setIsLoggedIn(true);
           }}
           onSignUp={(userInfo) => {
@@ -1008,12 +1075,29 @@ export default function App() {
               currentUser={currentUser}
               activeTab={feedTab}
               readingBooks={readingBooks}
+              bookCache={bookCache}
+              onBookCacheUpdate={(isbn, data) => setBookCache(prev => ({ ...prev, [isbn]: data }))}
               onScroll={handleFeedScroll}
               onRefresh={async () => {
                 try {
                   const fbReviews = await getReviews();
-                  setReviews(fbReviews.map(normalizeReview));
+                  if (fbReviews.length > 0) {
+                    const normalized = fbReviews.map(normalizeReview);
+                    setReviews(prev => {
+                      const fbIds = new Set(normalized.map(r => r.id));
+                      const merged = [...normalized, ...prev.filter(r => !fbIds.has(r.id))];
+                      return merged.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+                    });
+                  }
                 } catch (e) {}
+              }}
+              onUpdateBookInfo={async (isbn, bookData) => {
+                updateReviewsBookInfo(isbn, bookData).catch(() => {});
+                setReviews(prev => prev.map(r =>
+                  String(r.bookIsbn ?? r.isbn) === String(isbn)
+                    ? { ...r, book: bookData }
+                    : r
+                ));
               }}
               onBookPress={(book) => {
                 setSelectedBook(book);
@@ -1079,13 +1163,20 @@ export default function App() {
                 setIsLoggedIn(false);
                 setShowSplash(true);
               }}
-              onWithdraw={async () => {
-                await firebaseLogout();
-                await AsyncStorage.clear();
+              onWithdraw={async (reasonData) => {
+                await withdrawUser(currentUser.id, currentUser.provider, reasonData);
                 setShowMySettings(false);
                 setActiveBottomTab('home');
+                setCurrentUser(null);
+                setReadingBooks([]);
+                setWantToReadBooks([]);
+                setReadingRecords([]);
+                setReviews([]);
                 setIsLoggedIn(false);
                 setShowSplash(true);
+              }}
+              onUpdateUser={(updatedData) => {
+                setCurrentUser(prev => ({ ...prev, ...updatedData }));
               }}
             />
           )}

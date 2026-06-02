@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { View, Text, StyleSheet, ImageBackground, TouchableOpacity, Alert } from 'react-native';
+import { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ImageBackground, TouchableOpacity, Alert, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Colors, Typography } from '../styles';
@@ -8,10 +8,65 @@ import SimbolFillIcon from '../components/SimbolFillIcon';
 import LogoTextIcon from '../components/LogoTextIcon';
 import KakaoLoginButton from '../components/KakaoLoginButton';
 import GoogleLoginButton from '../components/GoogleLoginButton';
-import { loginWithKakao, loginWithGoogle, loginExistingUser } from '../services/auth';
+import { loginWithKakao, loginWithGoogle, getGoogleRedirectResult } from '../services/auth';
+import * as Google from 'expo-auth-session/providers/google';
+import * as WebBrowser from 'expo-web-browser';
+
+WebBrowser.maybeCompleteAuthSession();
+
+// Google OAuth Client IDs — Firebase Console > Authentication > Sign-in method > Google > Web client ID
+const GOOGLE_WEB_CLIENT_ID = '642592573898-elm8i8sjah4npkim86jcgr03vuarp41k.apps.googleusercontent.com';
+const GOOGLE_IOS_CLIENT_ID = '642592573898-elm8i8sjah4npkim86jcgr03vuarp41k.apps.googleusercontent.com'; // iOS 전용 Client ID 발급 전까지 Web ID 사용
+const GOOGLE_ANDROID_CLIENT_ID = '642592573898-elm8i8sjah4npkim86jcgr03vuarp41k.apps.googleusercontent.com'; // Android 전용 Client ID 발급 전까지 Web ID 사용
 
 export default function LoginScreen({ onLogin, onSignUp }) {
   const [isLoading, setIsLoading] = useState(false);
+
+  // 네이티브 전용 Google OAuth 훅 (웹은 signInWithRedirect 사용)
+  const [googleRequest, googleResponse, googlePromptAsync] = Google.useAuthRequest({
+    clientId: GOOGLE_WEB_CLIENT_ID,
+    iosClientId: GOOGLE_IOS_CLIENT_ID,
+    androidClientId: GOOGLE_ANDROID_CLIENT_ID,
+  });
+
+  // 웹: Google redirect 로그인 후 돌아왔을 때 결과 처리
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    getGoogleRedirectResult().then(result => {
+      if (!result) return;
+      if (result.isNewUser) {
+        onSignUp?.(result.userInfo);
+      } else {
+        onLogin?.(result.userInfo);
+      }
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS === 'web' || !googleResponse) return;
+    if (googleResponse.type === 'success') {
+      const idToken = googleResponse.authentication?.idToken;
+      handleGoogleLoginNative(idToken);
+    } else if (googleResponse.type === 'error' || googleResponse.type === 'dismiss') {
+      setIsLoading(false);
+    }
+  }, [googleResponse]);
+
+  const handleGoogleLoginNative = async (idToken) => {
+    try {
+      const result = await loginWithGoogle(idToken);
+      if (result.isNewUser) {
+        onSignUp?.(result.userInfo);
+      } else {
+        onLogin?.(result.userInfo);
+      }
+    } catch (error) {
+      console.error('Google login error:', error);
+      Alert.alert('로그인 실패', error.message || '구글 로그인에 실패했습니다.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleKakaoLogin = async () => {
     if (isLoading) return;
@@ -31,7 +86,6 @@ export default function LoginScreen({ onLogin, onSignUp }) {
       } else {
         // Existing user - log in and go to main page
         console.log('Existing user, logging in');
-        await loginExistingUser(result.userInfo);
         if (onLogin) {
           onLogin(result.userInfo);
         }
@@ -46,32 +100,24 @@ export default function LoginScreen({ onLogin, onSignUp }) {
 
   const handleGoogleLogin = async () => {
     if (isLoading) return;
+    setIsLoading(true);
 
-    try {
-      setIsLoading(true);
-      console.log('Google login initiated');
-
-      const result = await loginWithGoogle();
-
-      if (result.isNewUser) {
-        // New user - go to sign up screen
-        console.log('New user detected, navigating to sign up');
-        if (onSignUp) {
-          onSignUp(result.userInfo);
+    if (Platform.OS === 'web') {
+      try {
+        const result = await loginWithGoogle();
+        if (result.isNewUser) {
+          onSignUp?.(result.userInfo);
+        } else {
+          onLogin?.(result.userInfo);
         }
-      } else {
-        // Existing user - log in and go to main page
-        console.log('Existing user, logging in');
-        await loginExistingUser(result.userInfo);
-        if (onLogin) {
-          onLogin(result.userInfo);
-        }
+      } catch (error) {
+        console.error('Google login error:', error);
+        Alert.alert('로그인 실패', error.message || '구글 로그인에 실패했습니다.');
+        setIsLoading(false);
       }
-    } catch (error) {
-      console.error('Google login error:', error);
-      Alert.alert('로그인 실패', error.message || '구글 로그인에 실패했습니다.');
-    } finally {
-      setIsLoading(false);
+    } else {
+      // 네이티브: useAuthRequest 훅으로 Google OAuth → useEffect에서 처리
+      googlePromptAsync?.();
     }
   };
 

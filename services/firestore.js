@@ -22,6 +22,28 @@ export async function updateUser(userId, data) {
   await updateDoc(doc(db, 'users', userId), data);
 }
 
+export async function saveWithdrawalReason(userId, { reason, detail }) {
+  await addDoc(collection(db, 'withdrawalReasons'), {
+    userId,
+    reason,
+    detail: detail || '',
+    createdAt: serverTimestamp(),
+  });
+}
+
+export async function deleteAllUserData(userId) {
+  const deleteCollection = async (colName) => {
+    const snap = await getDocs(query(collection(db, colName), where('userId', '==', userId)));
+    await Promise.all(snap.docs.map(d => deleteDoc(d.ref)));
+  };
+  await Promise.all([
+    deleteDoc(doc(db, 'users', userId)),
+    deleteCollection('userBooks'),
+    deleteCollection('readingRecords'),
+    deleteCollection('reviews'),
+  ]);
+}
+
 export async function checkNickname(nickname) {
   const q = query(collection(db, 'users'), where('nickname', '==', nickname), limit(1));
   const snap = await getDocs(q);
@@ -84,6 +106,12 @@ export async function getReviews(roomId = null) {
   if (roomId) q = query(collection(db, 'reviews'), where('roomId', '==', roomId), orderBy('createdAt', 'desc'));
   const snap = await getDocs(q);
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+export async function updateReviewsBookInfo(isbn, bookData) {
+  const q = query(collection(db, 'reviews'), where('bookIsbn', '==', isbn));
+  const snap = await getDocs(q);
+  await Promise.all(snap.docs.map(d => updateDoc(d.ref, { book: bookData })));
 }
 
 export async function addReview(data) {

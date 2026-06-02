@@ -3,10 +3,14 @@
     "name": "dotori",
     "slug": "dotori",
     "version": "1.0.0",
+    "scheme": [
+      "com.sanga.dotori",
+      "kakao2b5d49a5425814b1d7700416fb404e35"
+    ],
     "orientation": "portrait",
     "icon": "./assets/appicon.svg",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -16,8 +20,10 @@
       "baseUrl": "/dotori"
     },
     "ios": {
+      "bundleIdentifier": "com.sanga.dotori",
       "supportsTablet": true,
       "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
         "NSPhotoLibraryUsageDescription": "도토리룸에서 독후감에 사진을 추가하기 위해 사진첩 접근 권한이 필요합니다.",
         "NSAppTransportSecurity": {
           "NSExceptionDomains": {
@@ -30,6 +36,7 @@
       }
     },
     "android": {
+      "package": "com.sanga.dotori",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -45,7 +52,22 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
-   }
-  
+    },
+    "plugins": [
+      "expo-web-browser",
+      [
+        "@react-native-seoul/kakao-login",
+        {
+          "kakaoAppKey": "1b885f7c3d187e32d08f2db2c8a124b7",
+          "kotlinVersion": "2.1.0"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "0e3b3a29-1e25-44e8-b071-428b692c6d54"
+      }
+    },
+    "owner": "ivorry"
+  }
 }

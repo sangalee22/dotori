@@ -3,6 +3,7 @@ import { StyleSheet, View, ScrollView, Text, Modal, Pressable, Animated, PanResp
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
+import { updateUser } from '../services/firestore';
 import { Colors, Spacing, Typography, BorderRadius } from '../styles';
 import UserProfile from '../components/UserProfile';
 import IconButton from '../components/IconButton';
@@ -43,7 +44,7 @@ function GoogleIcon() {
   );
 }
 
-export default function MyScreen({ reviews = [], currentUser, readingRecords = [], readingBooks = [], onBookPress, showSettings = false, onSettingsClose, onLogout, onWithdraw }) {
+export default function MyScreen({ reviews = [], currentUser, readingRecords = [], readingBooks = [], onBookPress, showSettings = false, onSettingsClose, onLogout, onWithdraw, onUpdateUser }) {
   const insets = useSafeAreaInsets();
   const [isProfileModalVisible, setIsProfileModalVisible] = React.useState(false);
   const profileModalTranslateY = React.useRef(new Animated.Value(300)).current;
@@ -131,9 +132,18 @@ export default function MyScreen({ reviews = [], currentUser, readingRecords = [
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 1 });
     handleCloseProfileModal();
     if (!result.canceled && result.assets?.length > 0) {
-      const newUser = { ...user, profileImage: result.assets[0].uri };
+      const profileImage = result.assets[0].uri;
+      const newUser = { ...user, profileImage };
       setUser(newUser);
-      await saveUserData(newUser);
+      try {
+        if (currentUser?.id) await updateUser(currentUser.id, { profileImage });
+        const stored = await AsyncStorage.getItem('currentUser');
+        if (stored) {
+          const updated = { ...JSON.parse(stored), profileImage };
+          await AsyncStorage.setItem('currentUser', JSON.stringify(updated));
+          onUpdateUser?.(updated);
+        }
+      } catch {}
     }
   };
 
@@ -141,7 +151,15 @@ export default function MyScreen({ reviews = [], currentUser, readingRecords = [
     handleCloseProfileModal();
     const newUser = { ...user, profileImage: null };
     setUser(newUser);
-    await saveUserData(newUser);
+    try {
+      if (currentUser?.id) await updateUser(currentUser.id, { profileImage: null });
+      const stored = await AsyncStorage.getItem('currentUser');
+      if (stored) {
+        const updated = { ...JSON.parse(stored), profileImage: null };
+        await AsyncStorage.setItem('currentUser', JSON.stringify(updated));
+        onUpdateUser?.(updated);
+      }
+    } catch {}
   };
 
   React.useEffect(() => {
@@ -171,18 +189,25 @@ export default function MyScreen({ reviews = [], currentUser, readingRecords = [
     const newUser = { ...user, nickname: nicknameInput };
     setUser(newUser);
     try {
+      if (currentUser?.id) {
+        await updateUser(currentUser.id, { nickname: nicknameInput });
+      }
       const stored = await AsyncStorage.getItem('currentUser');
       if (stored) {
-        await AsyncStorage.setItem('currentUser', JSON.stringify({ ...JSON.parse(stored), nickname: nicknameInput }));
+        const updated = { ...JSON.parse(stored), nickname: nicknameInput };
+        await AsyncStorage.setItem('currentUser', JSON.stringify(updated));
+        onUpdateUser?.(updated);
       }
     } catch {}
     setShowProfileEdit(false);
   };
 
   const getBook = (item) => {
-    if (item.book) return item.book;
-    const found = readingBooks.find(b => String(b.isbn) === String(item.bookIsbn));
-    if (found) return { title: found.title, author: found.author, cover: found.coverImage ?? found.cover };
+    const isbn = item.bookIsbn ?? item.isbn;
+    const found = readingBooks.find(b => String(b.isbn) === String(isbn));
+    const fallbackCover = found ? (found.coverImage ?? found.cover) : null;
+    if (item.book) return { ...item.book, cover: item.book.cover || fallbackCover };
+    if (found) return { title: found.title, author: found.author, cover: fallbackCover };
     return null;
   };
 

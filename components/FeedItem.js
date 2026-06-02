@@ -58,7 +58,7 @@ export default function FeedItem({
   style,
 }) {
   const [isLiked, setIsLiked] = React.useState(false);
-  const [likeCount, setLikeCount] = React.useState(likes);
+  const [likeCount, setLikeCount] = React.useState(Array.isArray(likes) ? likes.length : (likes ?? 0));
   const [isRevealed, setIsRevealed] = React.useState(false);
   const [isMoreModalVisible, setIsMoreModalVisible] = React.useState(false);
   const [isDeleteConfirmVisible, setIsDeleteConfirmVisible] = React.useState(false);
@@ -68,6 +68,20 @@ export default function FeedItem({
   const [selectedImageIndex, setSelectedImageIndex] = React.useState(0);
   const insets = useSafeAreaInsets();
   const moreModalTranslateY = React.useRef(new Animated.Value(300)).current;
+  const skeletonAnim = React.useRef(new Animated.Value(1)).current;
+
+  React.useEffect(() => {
+    if (showBookInfo && !book) {
+      const pulse = Animated.loop(
+        Animated.sequence([
+          Animated.timing(skeletonAnim, { toValue: 0.4, duration: 700, useNativeDriver: true }),
+          Animated.timing(skeletonAnim, { toValue: 1, duration: 700, useNativeDriver: true }),
+        ])
+      );
+      pulse.start();
+      return () => pulse.stop();
+    }
+  }, [showBookInfo, book]);
 
   // PanResponder for more modal drag
   const morePanResponder = React.useRef(
@@ -260,6 +274,19 @@ export default function FeedItem({
         ) : null}
       </View>
 
+      {/* Book Info Skeleton */}
+      {showBookInfo && !book && (
+        <Animated.View style={[styles.bookInfoWrapper, { opacity: skeletonAnim }]}>
+          <View style={styles.bookInfo}>
+            <View style={[styles.bookCover, styles.skeletonBlock]} />
+            <View style={styles.bookMeta}>
+              <View style={[styles.skeletonBar, { width: '55%', marginBottom: 6 }]} />
+              <View style={[styles.skeletonBar, { width: '35%' }]} />
+            </View>
+          </View>
+        </Animated.View>
+      )}
+
       {/* Book Info */}
       {showBookInfo && book && (
         <View style={styles.bookInfoWrapper}>
@@ -268,11 +295,18 @@ export default function FeedItem({
             activeOpacity={0.7}
             onPress={() => onBookPress && onBookPress(book)}
           >
-            {book.cover ? (
-              <Image source={{ uri: book.cover }} style={styles.bookCover} resizeMode="cover" />
-            ) : (
-              <View style={[styles.bookCover, styles.bookCoverPlaceholder]} />
-            )}
+            <View style={styles.bookCover}>
+              {book.cover ? (
+                <Image
+                  source={{ uri: book.cover }}
+                  style={{ width: '100%', height: '100%' }}
+                  resizeMode="cover"
+                  onError={() => console.log('[Cover] load failed:', book.cover)}
+                />
+              ) : (
+                <View style={[{ width: '100%', height: '100%' }, styles.bookCoverPlaceholder]} />
+              )}
+            </View>
             <View style={styles.bookMeta}>
               <Text style={styles.bookTitle} numberOfLines={1}>{book.title?.split(' - ')[0].trim()}</Text>
               {book.author ? <Text style={styles.bookAuthor} numberOfLines={1}>{book.author}</Text> : null}
@@ -377,10 +411,12 @@ export default function FeedItem({
               {likeCount}
             </Text>
           </TouchableOpacity>
+          {/* 댓글 기능 미구현 - 숨김 처리
           <TouchableOpacity style={styles.actionButton} activeOpacity={0.7}>
             <CommentIconNew color={Colors.gray300} />
             <Text style={styles.actionCount}>{comments}</Text>
           </TouchableOpacity>
+          */}
         </View>
         {isMyReview && (
           <IconButton size={36} onPress={handleOpenMoreModal}>
@@ -561,6 +597,14 @@ const styles = StyleSheet.create({
   },
   bookCoverPlaceholder: {
     backgroundColor: Colors.gray100,
+  },
+  skeletonBlock: {
+    backgroundColor: Colors.gray100,
+  },
+  skeletonBar: {
+    height: 12,
+    backgroundColor: Colors.gray100,
+    borderRadius: 6,
   },
   bookMeta: {
     flex: 1,

@@ -23,7 +23,9 @@ function getCalendarDays(year, month) {
   const firstDay = new Date(year, month - 1, 1).getDay();
   const daysInMonth = new Date(year, month, 0).getDate();
   const startOffset = firstDay === 0 ? 6 : firstDay - 1;
-  return [...Array(startOffset).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
+  const days = [...Array(startOffset).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
+  while (days.length % 7 !== 0) days.push(null);
+  return days;
 }
 
 function formatDuration(seconds) {
