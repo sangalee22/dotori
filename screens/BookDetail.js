@@ -30,8 +30,9 @@ import Switch from '../components/Switch';
 import ChevronDownIcon from '../components/ChevronDownIcon';
 import CheckIcon from '../components/CheckIcon';
 import { useToast } from '../contexts/ToastContext';
-import { fetchBookDetail, formatAuthorForDetail } from '../services/aladinApi';
+import { fetchBookDetail, searchBooks, formatAuthorForDetail } from '../services/aladinApi';
 import { formatTimeAgo } from '../utils/formatTimeAgo';
+import Skeleton from '../components/Skeleton';
 
 /**
  * BookDetail Screen
@@ -57,9 +58,9 @@ import { formatTimeAgo } from '../utils/formatTimeAgo';
  */
 export default function BookDetail({
   isbn,
-  bookTitle = '모우어',
+  bookTitle = null,
   bookSubtitle,
-  author = '천선란',
+  author = null,
   coverImage,
   initialFavorite = false,
   onToggleFavorite,
@@ -76,6 +77,7 @@ export default function BookDetail({
   openReviewModal = false,
   reviewInitialPage = 0,
   reviewInitialImages = [],
+  targetReviewId = null,
   initialReadingState = null,
   style,
 }) {
@@ -85,6 +87,20 @@ export default function BookDetail({
   const [isFavorite, setIsFavorite] = React.useState(initialFavorite);
   const { showToast, hideToast } = useToast();
   const scrollViewRef = React.useRef(null);
+  const feedSectionLayoutY = React.useRef(0);
+  const reviewLayoutYs = React.useRef({});
+
+  // Scroll to targetReviewId when reviews tab is active
+  React.useEffect(() => {
+    if (!targetReviewId || activeTab !== 'reviews') return;
+    const timer = setTimeout(() => {
+      const reviewY = reviewLayoutYs.current[targetReviewId];
+      if (reviewY !== undefined) {
+        scrollViewRef.current?.scrollTo({ y: feedSectionLayoutY.current + reviewY, animated: true });
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [targetReviewId, activeTab]);
 
   // Hide toast when component unmounts
   React.useEffect(() => {
@@ -184,7 +200,12 @@ export default function BookDetail({
 
   // Filter reviews for this book and sort
   const bookReviews = React.useMemo(() => {
-    let filtered = reviews.filter(review => review.bookIsbn === isbn);
+    const normTitle = (s) => (s || '').split(' - ')[0].trim().toLowerCase();
+    const thisTitle = normTitle(bookTitle);
+    let filtered = reviews.filter(review =>
+      review.bookIsbn === isbn ||
+      (thisTitle && normTitle(review.book?.title) === thisTitle)
+    );
 
     // Apply progress filter if enabled
     if (showUpToMyProgress) {
@@ -339,21 +360,32 @@ export default function BookDetail({
     setIsFavorite(initialFavorite);
   }, [initialFavorite]);
 
-  // 책 상세 정보 API 호출
+  // 책 상세 정보 API 호출 — 제목으로 정확한 isbn 먼저 확보 후 상세 조회
   React.useEffect(() => {
-    if (!isbn) return;
+    if (!isbn && !bookTitle) return;
 
     const loadBookDetail = async () => {
       setIsLoading(true);
       setError(null);
 
       try {
-        console.log(`📖 책 상세 정보 조회 - ISBN: ${isbn}`);
-        const data = await fetchBookDetail(isbn);
+        let targetIsbn = isbn;
+
+        // 제목으로 Aladin isbn 재확인 (Firestore isbn이 API와 불일치할 수 있음)
+        if (bookTitle) {
+          const norm = (s) => (s || '').split(' - ')[0].trim().toLowerCase();
+          const results = await searchBooks(bookTitle, 'Title', 3);
+          const match = results?.find(b => {
+            const t = norm(b.title);
+            const s = norm(bookTitle);
+            return t === s || t.includes(s) || s.includes(t);
+          }) || results?.[0];
+          if (match?.isbn) targetIsbn = match.isbn;
+        }
+
+        const data = await fetchBookDetail(targetIsbn);
         setBookData(data);
-        console.log('✅ 책 상세 정보 로드 완료:', data?.title);
       } catch (err) {
-        console.error('❌ 책 상세 정보 로드 실패:', err);
         setError('책 정보를 불러오는데 실패했습니다.');
       } finally {
         setIsLoading(false);
@@ -361,7 +393,7 @@ export default function BookDetail({
     };
 
     loadBookDetail();
-  }, [isbn]);
+  }, [isbn, bookTitle]);
 
   // Calculate reading progress when bookData is loaded and initialReadingState exists
   React.useEffect(() => {
@@ -835,25 +867,26 @@ export default function BookDetail({
 
   // API 데이터 또는 fallback 데이터 사용
   // title에서 제목과 부제목 분리 (예: "모우어 - 잿빛 미래의 이야기" -> "모우어", "잿빛 미래의 이야기")
-  const fullTitle = bookData?.title || bookTitle;
+  // 제목·저자: props 우선 (Firestore 저장 데이터가 신뢰할 수 있음)
+  // 커버·설명·출판사 등 부가정보: API 데이터 사용
+  const fullTitle = bookTitle || bookData?.title || '';
   const titleParts = fullTitle.split(' - ');
   const displayTitle = titleParts[0].trim();
   const displaySubtitle = titleParts.length > 1
     ? titleParts.slice(1).join(' - ').trim()
     : (bookData?.subTitle || bookData?.subtitle || bookSubtitle);
-  const authorData = formatAuthorForDetail(bookData?.author || author);
+  const authorData = formatAuthorForDetail(author || bookData?.author);
   const translatorRoles = ['옮긴이', '번역', '역자', '역'];
   const mainAuthors = authorData.filter(a => !a.role || !translatorRoles.some(r => a.role.includes(r)));
   const translators = authorData.filter(a => a.role && translatorRoles.some(r => a.role.includes(r)));
-  const displayCover = bookData?.cover || coverImage;
-  const displayDescription = bookData?.description || '잿빛 미래 속에서도 서로를 붙잡는 마음만은 끝내 살아남는다는 걸, 아주 고요하게 증명하는 이야기.';
-  const displayPublisher = bookData?.publisher || '출판사';
-  const displayPubDate = bookData?.pubDate || '2025.01.01';
-  const displayPages = bookData?.subInfo?.itemPage ? `${bookData.subInfo.itemPage}p` : '523p';
-  // 카테고리를 2depth까지만 표시 (예: "국내도서>소설/시/희곡>한국소설" → "국내도서>소설/시/희곡")
+  const displayCover = coverImage || bookData?.cover;
+  const displayDescription = bookData?.description || '';
+  const displayPublisher = bookData?.publisher || '-';
+  const displayPubDate = bookData?.pubDate || '-';
+  const displayPages = bookData?.subInfo?.itemPage ? `${bookData.subInfo.itemPage}p` : '-';
   const displayCategory = bookData?.categoryName
-    ? bookData.categoryName.split('>').slice(0, 2).join('>')
-    : '소설/시/희곡';
+    ? (bookData.categoryName.split('>')[2] ?? '-')
+    : '-';
 
   return (
     <Animated.View
@@ -959,43 +992,74 @@ export default function BookDetail({
           <>
           <View style={styles.bookSummarySection}>
             <View style={styles.bookSummaryContainer}>
-              <Text style={styles.bookSummaryText}>
-                {displayDescription}
-              </Text>
-              <View style={styles.bookSummaryIcon}>
-                <CommentLargeIcon width={60} height={60} />
-              </View>
+              {isLoading ? (
+                <View style={{ gap: 8, flex: 1 }}>
+                  <Skeleton width="100%" height={14} borderRadius={4} />
+                  <Skeleton width="100%" height={14} borderRadius={4} />
+                  <Skeleton width="70%" height={14} borderRadius={4} />
+                </View>
+              ) : (
+                <>
+                  <Text style={styles.bookSummaryText}>{displayDescription}</Text>
+                  <View style={styles.bookSummaryIcon}>
+                    <CommentLargeIcon width={60} height={60} />
+                  </View>
+                </>
+              )}
             </View>
 
             {/* Book Info Details */}
             <View style={styles.bookInfoDetails}>
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>저자</Text>
-                <Text style={styles.infoValue}>
-                  {mainAuthors.length > 0 ? mainAuthors.map(a => a.name).join(', ') : author.split(',')[0].trim()}
-                </Text>
-              </View>
-              {translators.length > 0 && (
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>옮긴이</Text>
-                  <Text style={styles.infoValue}>{translators.map(a => a.name).join(', ')}</Text>
-                </View>
+              {isLoading ? (
+                <>
+                  <View style={styles.infoRow}>
+                    <Skeleton width={40} height={14} borderRadius={4} />
+                    <Skeleton width={120} height={14} borderRadius={4} style={{ marginLeft: 8 }} />
+                  </View>
+                  <View style={styles.infoRow}>
+                    <Skeleton width={40} height={14} borderRadius={4} />
+                    <Skeleton width={100} height={14} borderRadius={4} style={{ marginLeft: 8 }} />
+                  </View>
+                  <View style={styles.infoRow}>
+                    <Skeleton width={40} height={14} borderRadius={4} />
+                    <Skeleton width={80} height={14} borderRadius={4} style={{ marginLeft: 8 }} />
+                  </View>
+                  <View style={styles.infoRow}>
+                    <Skeleton width={40} height={14} borderRadius={4} />
+                    <Skeleton width={60} height={14} borderRadius={4} style={{ marginLeft: 8 }} />
+                  </View>
+                </>
+              ) : (
+                <>
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>저자</Text>
+                    <Text style={styles.infoValue}>
+                      {mainAuthors.length > 0 ? mainAuthors.map(a => a.name).join(', ') : (author?.split(',')[0].trim() ?? '')}
+                    </Text>
+                  </View>
+                  {translators.length > 0 && (
+                    <View style={styles.infoRow}>
+                      <Text style={styles.infoLabel}>옮긴이</Text>
+                      <Text style={styles.infoValue}>{translators.map(a => a.name).join(', ')}</Text>
+                    </View>
+                  )}
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>출판사</Text>
+                    <View style={styles.infoValueRow}>
+                      <Text style={styles.infoValue}>{displayPublisher}</Text>
+                      <Text style={styles.infoValueSecondary}> {displayPubDate}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>카테고리</Text>
+                    <Text style={styles.infoValue}>{displayCategory}</Text>
+                  </View>
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>분량</Text>
+                    <Text style={styles.infoValue}>{displayPages}</Text>
+                  </View>
+                </>
               )}
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>출판사</Text>
-                <View style={styles.infoValueRow}>
-                  <Text style={styles.infoValue}>{displayPublisher}</Text>
-                  <Text style={styles.infoValueSecondary}> {displayPubDate}</Text>
-                </View>
-              </View>
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>카테고리</Text>
-                <Text style={styles.infoValue}>{displayCategory}</Text>
-              </View>
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>분량</Text>
-                <Text style={styles.infoValue}>{displayPages}</Text>
-              </View>
             </View>
           </View>
 
@@ -1004,56 +1068,58 @@ export default function BookDetail({
             <View style={styles.sectionHeader}>
               <View style={styles.sectionTitleContainer}>
                 <SectionTitle style={{ paddingRight: 0 }}>독후감</SectionTitle>
-                <Text style={styles.reviewCount}>265</Text>
+                {bookReviews.length > 0 && (
+                  <Text style={styles.reviewCount}>{bookReviews.length}</Text>
+                )}
               </View>
               <MoreButton label="전체" onPress={handleGoToReviewsTab} />
             </View>
 
             <View style={styles.reviewContainer}>
-              <ReviewItem
-                username="포코어포코"
-                date="2025.12.12"
-                page={12}
-                reviewText="이 책은 독자의 마음을 사로잡는 매력적인 이야기로 가득 차 있습니다. 등장인물들의 깊이 있는 감정선이 돋보이며, 흥미진진한 전개가 계속해서 긴장을 유지합니다. 작가의 섬세한 문체는 독서를 더욱 즐겁게 만들어 줍니다. 전반적으로, 이 책은 꼭 읽어봐야 할 작품입니다."
-                numberOfLines={3}
-                onMorePress={() => {}}
-              />
-
-              <ReviewItem
-                username="포코어포코"
-                date="2025.12.12"
-                page={12}
-                reviewText="이 책은 훌륭했습니다! 각 장마다 깊이 있는 통찰과 감동적인 이야기들이 많았습니다."
-                numberOfLines={2}
-                onMorePress={() => {}}
-              />
-
-              <ReviewItem
-                username="포코어포코"
-                date="2025.12.12"
-                page={12}
-                reviewText="재미있음"
-                numberOfLines={1}
-                onMorePress={() => {}}
-              />
-
-              {/* Already Read Box */}
-              <View style={styles.alreadyReadBox}>
-                <View style={styles.alreadyReadContent}>
-                  <View style={styles.alreadyReadLeft}>
-                    <SimbolOutlineIcon width={20} height={20} color={Colors.gray700} />
-                    <Text style={styles.alreadyReadText}>이미 읽으셨나요?</Text>
-                  </View>
+              {bookReviews.length === 0 ? (
+                <View style={styles.emptyReviewCard}>
+                  <SimbolOutlineIcon width={20} height={20} color={Colors.gray700} />
+                  <Text style={styles.emptyReviewCardText}>{'아직 독후감이 없어요!\n혹시 이 책을 읽었나요?'}</Text>
                   <Button
                     variant="sub"
                     size="medium"
-                    style={styles.alreadyReadButton}
                     onPress={handleOpenReview}
                   >
                     독후감 쓰기
                   </Button>
                 </View>
-              </View>
+              ) : (
+                <>
+                  {bookReviews.slice(0, 3).map((review) => (
+                    <ReviewItem
+                      key={review.id}
+                      username={review.user?.name ?? '익명'}
+                      userImage={review.user?.profileImage}
+                      date={formatTimeAgo(review.createdAt)}
+                      page={review.page}
+                      isCompleted={review.isCompleted}
+                      reviewText={review.content}
+                      numberOfLines={3}
+                    />
+                  ))}
+                  <View style={styles.alreadyReadBox}>
+                    <View style={styles.alreadyReadContent}>
+                      <View style={styles.alreadyReadLeft}>
+                        <SimbolOutlineIcon width={20} height={20} color={Colors.gray700} />
+                        <Text style={styles.alreadyReadText}>이미 읽으셨나요?</Text>
+                      </View>
+                      <Button
+                        variant="sub"
+                        size="medium"
+                        style={styles.alreadyReadButton}
+                        onPress={handleOpenReview}
+                      >
+                        독후감 쓰기
+                      </Button>
+                    </View>
+                  </View>
+                </>
+              )}
             </View>
           </View>
           </>
@@ -1061,9 +1127,16 @@ export default function BookDetail({
 
           {/* Reviews Feed Section */}
           {activeTab === 'reviews' && (
-            <View style={styles.feedSection}>
+            <View
+              style={styles.feedSection}
+              onLayout={(e) => { feedSectionLayoutY.current = e.nativeEvent.layout.y; }}
+            >
               {bookReviews.length > 0 ? (
                 bookReviews.map((item) => (
+                  <View
+                    key={item.id}
+                    onLayout={(e) => { reviewLayoutYs.current[item.id] = e.nativeEvent.layout.y; }}
+                  >
                   <FeedItem
                     key={item.id}
                     id={item.id}
@@ -1073,7 +1146,7 @@ export default function BookDetail({
                       : item.user}
                     timeAgo={item.createdAt ? formatTimeAgo(item.createdAt) : item.timeAgo}
                     page={item.page}
-                    myCurrentPage={currentPage}
+                    myCurrentPage={isReading && !isCompleted ? currentPage : Infinity}
                     content={item.content}
                     images={item.images}
                     likes={item.likes}
@@ -1087,6 +1160,7 @@ export default function BookDetail({
                     onEdit={handleEditReview}
                     onDelete={handleDeleteReview}
                   />
+                  </View>
                 ))
               ) : (
                 <View style={styles.emptyReviews}>
@@ -1979,6 +2053,17 @@ const styles = StyleSheet.create({
   emptyReviewsText: {
     ...Typography.subtitle1Medium,
     color: Colors.gray700,
+  },
+  emptyReviewCard: {
+    // padding: Spacing.xl,
+    alignItems: 'center',
+    gap: Spacing.xs,
+  },
+  emptyReviewCardText: {
+    ...Typography.body3Regular,
+    color: Colors.gray700,
+    textAlign: 'center',
+    marginBottom: Spacing.sm,
   },
 
   // Sort Modal Styles

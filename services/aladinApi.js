@@ -8,9 +8,9 @@ import { Platform } from 'react-native';
 const ALADIN_API_KEY = 'ttbsang_a0_01255001';
 const BASE_URL = 'http://www.aladin.co.kr/ttb/api';
 
-// 웹 환경에서는 CORS 우회를 위해 프록시 사용
+// 웹 환경에서는 CORS 우회를 위해 로컬 프록시 사용
 const USE_PROXY = Platform.OS === 'web';
-const PROXY_URL = 'https://api.codetabs.com/v1/proxy/?quest=';
+const PROXY_URL = 'http://localhost:8090/';
 
 /**
  * 알라딘 공식 카테고리 매핑
@@ -20,36 +20,105 @@ const PROXY_URL = 'https://api.codetabs.com/v1/proxy/?quest=';
  * QueryType=Bestseller와 함께 사용
  */
 const CATEGORY_MAP = {
-  // 탭 표시 카테고리 (CATEGORY_LIST와 매칭)
-  '종합': 0,          // 전체 카테고리
-  '소설': 1,          // 소설
-  '시/에세이': 50929, // 시/에세이
-  '자기계발': 336,    // 자기계발
-  '경제/경영': 170,   // 경제경영
-  '인문': 656,        // 인문
-  '건강/뷰티': 55889, // 건강/뷰티
-
-  // 추가 카테고리 (필요시 CATEGORY_LIST에 추가 가능)
-  '과학': 987,        // 과학
-  '예술': 55890,      // 예술/대중문화
-  '여행': 798,        // 여행
-  '청소년': 1383,     // 청소년
-  '요리': 1196,       // 요리
-  // ❌ 제외: 어린이(1108), 종교(1237) - 서비스에서 사용하지 않음
+  '종합': 0,
+  '소설': 1,
+  '시': 50940,
+  '에세이': 51371,
+  '자기계발': 336,
+  '경제/경영': 170,
+  '인문': 656,
+  '건강/뷰티': 55890,
 };
 
-/**
- * 카테고리 목록 (탭에 표시될 순서)
- * 대중적 인기도 순서로 정렬
- */
 export const CATEGORY_LIST = [
-  { id: 0, name: '종합', label: '종합' },              // 전체
-  { id: 1, name: '소설', label: '소설' },              // 가장 인기
-  { id: 50929, name: '시/에세이', label: '시/에세이' }, // 감성
-  { id: 336, name: '자기계발', label: '자기계발' },     // 실용
-  { id: 170, name: '경제/경영', label: '경제/경영' },   // 재테크
-  { id: 656, name: '인문', label: '인문' },            // 교양
-  { id: 55889, name: '건강/뷰티', label: '건강/뷰티' }, // 건강
+  { id: 0, name: '종합', label: '종합', subs: [] },
+  {
+    id: 1, name: '소설', label: '소설',
+    subs: [
+      { id: 1,      label: '전체' },
+      { id: 50917,  label: '한국소설' },
+      { id: 50918,  label: '일본소설' },
+      { id: 50919,  label: '영미소설' },
+      { id: 50920,  label: '스페인/중남미' },
+      { id: 50921,  label: '프랑스소설' },
+      { id: 50922,  label: '독일소설' },
+      { id: 50923,  label: '중국소설' },
+      { id: 52650,  label: '러시아소설' },
+      { id: 50925,  label: '세계의 소설' },
+      { id: 50926,  label: '추리/미스터리' },
+      { id: 50928,  label: '판타지/환상' },
+      { id: 50929,  label: '역사소설' },
+      { id: 50930,  label: 'SF소설' },
+      { id: 50931,  label: '호러/공포' },
+      { id: 50932,  label: '무협소설' },
+      { id: 50933,  label: '액션/스릴러' },
+      { id: 50935,  label: '로맨스소설' },
+      { id: 51252,  label: '여성문학' },
+    ],
+  },
+  { id: 50940, name: '시', label: '시', subs: [] },
+  { id: 51371, name: '에세이', label: '에세이', subs: [] },
+  {
+    id: 336, name: '자기계발', label: '자기계발',
+    subs: [
+      { id: 336,    label: '전체' },
+      { id: 70214,  label: '성공' },
+      { id: 70212,  label: '리더십' },
+      { id: 70211,  label: '행복론' },
+      { id: 2951,   label: '인간관계' },
+      { id: 70236,  label: '힐링' },
+      { id: 107822, label: '정리/심플라이프' },
+      { id: 70224,  label: '협상/설득/화술' },
+      { id: 70220,  label: '시간/정보관리' },
+      { id: 70223,  label: '창의적사고' },
+      { id: 2943,   label: '취업/진로' },
+      { id: 70241,  label: '20대 자기계발' },
+      { id: 70218,  label: '여성 자기계발' },
+      { id: 70219,  label: '중년 자기계발' },
+      { id: 70233,  label: '프레젠테이션' },
+      { id: 70228,  label: '기획/보고' },
+    ],
+  },
+  {
+    id: 170, name: '경제/경영', label: '경제/경영',
+    subs: [
+      { id: 170,    label: '전체' },
+      { id: 3057,   label: '경제학/경제일반' },
+      { id: 2172,   label: '기업 경영' },
+      { id: 2028,   label: '기업/경영자 스토리' },
+      { id: 261,    label: '마케팅/세일즈' },
+      { id: 197414, label: '트렌드/미래전망' },
+      { id: 172,    label: '재테크/투자' },
+      { id: 177,    label: '창업/취업/은퇴' },
+      { id: 3049,   label: 'CEO 능력계발' },
+    ],
+  },
+  {
+    id: 656, name: '인문', label: '인문',
+    subs: [
+      { id: 656, label: '인문학' },
+      { id: 74,  label: '역사' },
+      { id: 798, label: '사회과학' },
+      { id: 987, label: '과학' },
+    ],
+  },
+  {
+    id: 55890, name: '건강/뷰티', label: '건강/뷰티',
+    subs: [
+      { id: 55890, label: '전체' },
+      { id: 53521, label: '건강정보' },
+      { id: 53516, label: '건강운동' },
+      { id: 53514, label: '다이어트' },
+      { id: 53515, label: '헬스/피트니스' },
+      { id: 53518, label: '질병치료와 예방' },
+      { id: 53517, label: '정신건강' },
+      { id: 53520, label: '대체의학' },
+      { id: 53519, label: '한의학' },
+      { id: 53523, label: '수영/수상스포츠' },
+      { id: 53522, label: '걷기/육상스포츠' },
+      { id: 53529, label: '등산/캠핑' },
+    ],
+  },
 ];
 
 /**
@@ -59,6 +128,19 @@ export const CATEGORY_LIST = [
  * @param {string} authorString - 원본 저자 문자열
  * @returns {string} 정리된 저자명
  */
+function decodeHtml(str) {
+  if (!str) return '';
+  return str
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/<[^>]*>/g, '')
+    .trim();
+}
+
 export function cleanAuthorName(authorString) {
   if (!authorString) return '';
 
@@ -169,7 +251,7 @@ export async function fetchBestsellers(category = '종합', maxResults = 10) {
           isbn: book.isbn13 || book.isbn,
           publisher: book.publisher,
           pubDate: book.pubDate,
-          description: book.description,
+          description: decodeHtml(book.description),
           priceStandard: book.priceStandard,
           priceSales: book.priceSales,
           link: book.link,
@@ -268,7 +350,9 @@ export async function fetchBookDetail(itemId) {
     const data = await response.json();
 
     if (data && data.item && data.item.length > 0) {
-      return data.item[0];
+      const item = data.item[0];
+      item.description = decodeHtml(item.description);
+      return item;
     }
 
     return null;
@@ -347,7 +431,7 @@ export async function fetchNewBooks(category = '종합', maxResults = 10) {
           isbn: book.isbn13 || book.isbn,
           publisher: book.publisher,
           pubDate: book.pubDate,
-          description: book.description,
+          description: decodeHtml(book.description),
           priceStandard: book.priceStandard,
           priceSales: book.priceSales,
           link: book.link,
@@ -413,7 +497,7 @@ export async function searchBooks(query, queryType = 'Keyword', maxResults = 20)
           isbn: book.isbn13 || book.isbn,
           publisher: book.publisher,
           pubDate: book.pubDate,
-          description: book.description,
+          description: decodeHtml(book.description),
           priceStandard: book.priceStandard,
           priceSales: book.priceSales,
           link: book.link,

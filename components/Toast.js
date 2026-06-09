@@ -10,13 +10,16 @@ import { Colors, Typography, Spacing, BorderRadius } from '../styles';
  * @param {function} onHide - Callback when toast hides
  * @param {object} style - Additional style overrides
  */
-export default function Toast({ visible, message, duration = 2000, onHide, style }) {
+export default function Toast({ visible, message, duration = 2000, onHide, style, requestId }) {
   const opacity = React.useRef(new Animated.Value(0)).current;
   const translateY = React.useRef(new Animated.Value(20)).current;
 
   useEffect(() => {
     if (visible) {
-      // Show animation
+      // 진행 중인 애니메이션 즉시 중단 후 재시작 (rapid 호출 대응)
+      opacity.stopAnimation();
+      translateY.stopAnimation();
+
       Animated.parallel([
         Animated.timing(opacity, {
           toValue: 1,
@@ -30,7 +33,6 @@ export default function Toast({ visible, message, duration = 2000, onHide, style
         }),
       ]).start();
 
-      // Auto hide after duration
       const timer = setTimeout(() => {
         Animated.parallel([
           Animated.timing(opacity, {
@@ -50,7 +52,7 @@ export default function Toast({ visible, message, duration = 2000, onHide, style
 
       return () => clearTimeout(timer);
     }
-  }, [visible, duration, onHide]);
+  }, [visible, duration, onHide, requestId]);
 
   return (
     <Animated.View

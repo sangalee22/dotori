@@ -111,7 +111,12 @@ export async function getReviews(roomId = null) {
 export async function updateReviewsBookInfo(isbn, bookData) {
   const q = query(collection(db, 'reviews'), where('bookIsbn', '==', isbn));
   const snap = await getDocs(q);
-  await Promise.all(snap.docs.map(d => updateDoc(d.ref, { book: bookData })));
+  // bookTitle이 이미 있는 리뷰는 건드리지 않음 (리뷰 작성 시 저장된 정확한 데이터 보호)
+  await Promise.all(
+    snap.docs
+      .filter(d => !d.data().bookTitle)
+      .map(d => updateDoc(d.ref, { book: bookData }))
+  );
 }
 
 export async function addReview(data) {

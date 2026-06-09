@@ -5,10 +5,11 @@
     "version": "1.0.0",
     "scheme": [
       "com.sanga.dotori",
-      "kakao2b5d49a5425814b1d7700416fb404e35"
+      "kakao1b885f7c3d187e32d08f2db2c8a124b7",
+      "com.googleusercontent.apps.642592573898-4usjhm7pucep31piahrnj4sf4bdbgsbg"
     ],
     "orientation": "portrait",
-    "icon": "./assets/appicon.svg",
+    "icon": "./assets/appicon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": false,
     "splash": {
@@ -25,9 +26,20 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSPhotoLibraryUsageDescription": "도토리룸에서 독후감에 사진을 추가하기 위해 사진첩 접근 권한이 필요합니다.",
+        "LSApplicationQueriesSchemes": [
+          "kakaokompassauth",
+          "storekit",
+          "kakaolink",
+          "kakaotalk",
+          "kakaoplus"
+        ],
         "NSAppTransportSecurity": {
           "NSExceptionDomains": {
-            "www.aladin.co.kr": {
+            "aladin.co.kr": {
+              "NSExceptionAllowsInsecureHTTPLoads": true,
+              "NSIncludesSubdomains": true
+            },
+            "kakaocdn.net": {
               "NSExceptionAllowsInsecureHTTPLoads": true,
               "NSIncludesSubdomains": true
             }

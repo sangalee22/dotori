@@ -19,7 +19,7 @@ const PERIOD_TABS = [
 ];
 
 const SUBTAB_HEIGHT = 49;
-const CATEGORY_HEIGHT = 60;
+const CATEGORY_HEIGHT = 48;
 const INITIAL_COUNT = 20;
 const PAGE_COUNT = 10;
 
@@ -58,6 +58,10 @@ export default function WeeklyBestDetail({ onBack, onBookPress }) {
 
   const [activePeriod, setActivePeriod] = React.useState('monthly');
   const [activeCategory, setActiveCategory] = React.useState('종합');
+  const [activeSubCategory, setActiveSubCategory] = React.useState(null);
+
+  const activeCategoryObj = CATEGORY_LIST.find(c => c.name === activeCategory);
+  const effectiveCategoryId = activeSubCategory ?? activeCategoryObj?.id ?? 0;
   const [books, setBooks] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
   const [loadingMore, setLoadingMore] = React.useState(false);
@@ -75,12 +79,12 @@ export default function WeeklyBestDetail({ onBack, onBookPress }) {
     setLoading(true);
     setBooks([]);
     setHasMore(true);
-    fetchBestsellersByPeriod(activePeriod, activeCategory, INITIAL_COUNT, 1).then(data => {
+    fetchBestsellersByPeriod(activePeriod, effectiveCategoryId, INITIAL_COUNT, 1).then(data => {
       setBooks(data);
       setHasMore(data.length >= INITIAL_COUNT);
       setLoading(false);
     });
-  }, [activePeriod, activeCategory]);
+  }, [activePeriod, effectiveCategoryId]);
 
   React.useEffect(() => { loadInitial(); }, [loadInitial]);
 
@@ -88,12 +92,12 @@ export default function WeeklyBestDetail({ onBack, onBookPress }) {
     if (loadingMore || !hasMore || loading) return;
     setLoadingMore(true);
     const start = books.length + 1;
-    fetchBestsellersByPeriod(activePeriod, activeCategory, PAGE_COUNT, start).then(data => {
+    fetchBestsellersByPeriod(activePeriod, effectiveCategoryId, PAGE_COUNT, start).then(data => {
       setBooks(prev => [...prev, ...data]);
       setHasMore(data.length >= PAGE_COUNT);
       setLoadingMore(false);
     });
-  }, [loadingMore, hasMore, loading, books.length, activePeriod, activeCategory]);
+  }, [loadingMore, hasMore, loading, books.length, activePeriod, effectiveCategoryId]);
 
   const handleBack = () => {
     Animated.timing(slideAnim, { toValue: Dimensions.get('window').width, duration: 300, useNativeDriver: false })
@@ -149,13 +153,32 @@ export default function WeeklyBestDetail({ onBack, onBookPress }) {
                 renderItem={({ item: cat }) => (
                   <TabElement
                     active={activeCategory === cat.name}
-                    onPress={() => setActiveCategory(cat.name)}
+                    onPress={() => { setActiveCategory(cat.name); setActiveSubCategory(null); }}
                     style={{ marginRight: Spacing.xs }}
                   >
                     {cat.label}
                   </TabElement>
                 )}
               />
+              {activeCategoryObj?.subs?.length > 0 && (
+                <FlatList
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  data={activeCategoryObj.subs}
+                  keyExtractor={s => String(s.id)}
+                  contentContainerStyle={styles.categoryRow}
+                  style={styles.categoryScroll}
+                  renderItem={({ item: sub }) => (
+                    <TabElement
+                      active={effectiveCategoryId === sub.id}
+                      onPress={() => setActiveSubCategory(sub.id)}
+                      style={{ marginRight: Spacing.xs }}
+                    >
+                      {sub.label}
+                    </TabElement>
+                  )}
+                />
+              )}
               {activePeriod === 'monthly' && (
                 <View style={styles.dateRow}>
                   <Pressable style={styles.datePicker} onPress={() => {}}>
@@ -196,18 +219,17 @@ const styles = StyleSheet.create({
   },
   subTabRow: { flexDirection: 'row', paddingHorizontal: Spacing.sm },
   subTabDivider: { height: 1, backgroundColor: Colors.gray50 },
-  categoryScroll: { height: CATEGORY_HEIGHT },
-  categoryRow: { paddingHorizontal: Spacing.md, alignItems: 'center' },
-  dateRow: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs },
+  categoryScroll: { height: CATEGORY_HEIGHT},
+  categoryRow: { alignItems: 'center' , marginBottom: Spacing.md },
+  dateRow: { paddingVertical: Spacing.xs , marginBottom: Spacing.lg },
   datePicker: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
   dateText: { ...Typography.body1Regular, color: Colors.gray800 },
 
-  listContent: { paddingHorizontal: Spacing.lg, paddingBottom: 100 },
+  listContent: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.huge, paddingTop: Spacing.lg, },
 
   listItem: {
     flexDirection: 'row',
     alignItems: 'top',
-    // paddingVertical: Spacing.md,
     marginBottom: Spacing.xl,
     gap: Spacing.sm,
   },

@@ -1,5 +1,7 @@
 import React from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, Modal, ScrollView, ActivityIndicator, Platform, Animated, PanResponder, Pressable } from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet, Modal, ScrollView, ActivityIndicator, Platform, Animated, PanResponder, Pressable, AppState } from 'react-native';
+import { BlurView } from 'expo-blur';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { saveCardImage, captureCard } from '../utils/imageSave';
 import { pickImageFromLibrary, takePhoto as takePhotoUtil } from '../utils/pickImage';
 import { useSinglePress } from '../utils/useSinglePress';
@@ -226,6 +228,8 @@ function MyIcon({ active }) {
 export default function BottomNavigation({ activeTab = 'home', onTabPress, currentBooks = [], readingRecords = [], onUpdateReading, onWriteReview, onSaveReadingRecord, onReady, style }) {
   const insets = useSafeAreaInsets();
   const cardCaptureRef = React.useRef(null);
+  const slideAnim = React.useRef(new Animated.Value(0)).current;
+  const [tabGroupWidth, setTabGroupWidth] = React.useState(0);
   const [resultToast, setResultToast] = React.useState({ visible: false, message: '' });
   const [customCardBg, setCustomCardBg] = React.useState(null);
   const [showBookInfo, setShowBookInfo] = React.useState(true);
@@ -296,6 +300,16 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
   const pageInputRef = React.useRef(null);
   const [elapsed, setElapsed] = React.useState(0);
   const timerRef = React.useRef(null);
+  // 타임스탬프 기반 타이머 — 앱 종료/백그라운드 후에도 경과 시간 보존
+  const sessionStartTsRef = React.useRef(null); // 현재 세션 시작 시각 (ms)
+  const elapsedBaseRef = React.useRef(0);        // 이전 세션까지의 누적 초
+
+  const getCurrentElapsed = React.useCallback(() => {
+    if (sessionStartTsRef.current) {
+      return elapsedBaseRef.current + Math.floor((Date.now() - sessionStartTsRef.current) / 1000);
+    }
+    return elapsedBaseRef.current;
+  }, []);
   const [isPauseModalVisible, setIsPauseModalVisible] = React.useState(false);
   const [isResultModalVisible, setIsResultModalVisible] = React.useState(false);
   const [resultElapsed, setResultElapsed] = React.useState(0);
@@ -335,12 +349,57 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
 
   React.useEffect(() => {
     if (isPlaying && !isPauseModalVisible) {
-      timerRef.current = setInterval(() => setElapsed(s => s + 1), 1000);
+      // 세션 시작 — 현재 시각 기록
+      sessionStartTsRef.current = Date.now();
+      timerRef.current = setInterval(() => setElapsed(getCurrentElapsed()), 1000);
+      // AsyncStorage에 상태 저장 (앱 종료 후 복원용)
+      AsyncStorage.setItem('timerState', JSON.stringify({
+        sessionStartTs: sessionStartTsRef.current,
+        elapsedBase: elapsedBaseRef.current,
+        selectedBook,
+        readingStartPage,
+        readingStartTime: readingStartTime?.toISOString() ?? null,
+      })).catch(() => {});
     } else {
       clearInterval(timerRef.current);
+      // 일시정지 — 누적 시간 저장
+      if (sessionStartTsRef.current) {
+        elapsedBaseRef.current = getCurrentElapsed();
+        sessionStartTsRef.current = null;
+        setElapsed(elapsedBaseRef.current);
+      }
+      if (!isPlaying) {
+        AsyncStorage.removeItem('timerState').catch(() => {});
+      }
     }
     return () => clearInterval(timerRef.current);
   }, [isPlaying, isPauseModalVisible]);
+
+  // 앱 포그라운드 복귀 시 경과 시간 재계산
+  React.useEffect(() => {
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next === 'active' && isPlaying && sessionStartTsRef.current) {
+        setElapsed(getCurrentElapsed());
+      }
+    });
+    return () => sub.remove();
+  }, [isPlaying, getCurrentElapsed]);
+
+  // 앱 재시작 시 타이머 상태 복원
+  React.useEffect(() => {
+    AsyncStorage.getItem('timerState').then(stored => {
+      if (!stored) return;
+      const { sessionStartTs, elapsedBase, selectedBook: savedBook, readingStartPage: savedStartPage, readingStartTime: savedStartTime } = JSON.parse(stored);
+      const restored = elapsedBase + Math.floor((Date.now() - sessionStartTs) / 1000);
+      elapsedBaseRef.current = restored;
+      sessionStartTsRef.current = null;
+      setElapsed(restored);
+      if (savedBook) setSelectedBook(savedBook);
+      if (savedStartPage !== undefined) setReadingStartPage(savedStartPage);
+      if (savedStartTime) setReadingStartTime(new Date(savedStartTime));
+      setIsPlaying(true);
+    }).catch(() => {});
+  }, []);
 
   const formatTime = (s) => {
     const h = String(Math.floor(s / 3600)).padStart(2, '0');
@@ -388,6 +447,9 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
   const handleCloseModal = () => {
     setIsPlaying(false);
     setElapsed(0);
+    elapsedBaseRef.current = 0;
+    sessionStartTsRef.current = null;
+    AsyncStorage.removeItem('timerState').catch(() => {});
     setIsModalOpen(false);
     setSearchText('');
     setSearchResults([]);
@@ -506,24 +568,53 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
     { id: 'my', label: 'my', Icon: MyIcon },
   ];
 
+  React.useEffect(() => {
+    if (tabGroupWidth === 0) return;
+    const index = tabs.findIndex(t => t.id === activeTab);
+    const tabWidth = (tabGroupWidth - 2 * Spacing.xs) / tabs.length;
+    Animated.spring(slideAnim, {
+      toValue: index * tabWidth,
+      useNativeDriver: true,
+      tension: 300,
+      friction: 30,
+    }).start();
+  }, [activeTab, tabGroupWidth]);
+
   return (
     <View style={[styles.container, style]}>
-      {tabs.map((tab) => {
-        const isActive = activeTab === tab.id;
-        return (
-          <TouchableOpacity
-            key={tab.id}
-            style={styles.tab}
-            onPress={() => onTabPress && onTabPress(tab.id)}
-            activeOpacity={0.7}
-          >
-            <tab.Icon active={isActive} />
-            <Text style={[styles.label, isActive && styles.activeLabel]}>
-              {tab.label}
-            </Text>
-          </TouchableOpacity>
-        );
-      })}
+      <View
+        style={styles.tabGroup}
+        onLayout={(e) => setTabGroupWidth(e.nativeEvent.layout.width)}
+      >
+        <BlurView intensity={15} tint="light" style={[StyleSheet.absoluteFill, { borderRadius: BorderRadius.xl, overflow: 'hidden' }]} />
+        {tabGroupWidth > 0 && (
+          <Animated.View
+            style={[
+              styles.tabPill,
+              {
+                width: (tabGroupWidth - 2 * Spacing.xs) / tabs.length,
+                transform: [{ translateX: slideAnim }],
+              },
+            ]}
+          />
+        )}
+        {tabs.map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <TouchableOpacity
+              key={tab.id}
+              style={styles.tab}
+              onPress={() => onTabPress && onTabPress(tab.id)}
+              activeOpacity={0.7}
+            >
+              <tab.Icon active={isActive} />
+              <Text style={[styles.label, isActive && styles.activeLabel]}>
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
       <View style={styles.playButtonWrapper}>
         {(isPlaying || elapsed > 0) && (
           <View style={styles.timerBox}>
@@ -565,7 +656,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
           const uniqueDays = new Set(existingDates);
           uniqueDays.add(todayStr);
           setSessionReadingDays(uniqueDays.size);
-          setResultElapsed(elapsed);
+          setResultElapsed(getCurrentElapsed());
           setReadingEndTime(new Date());
           setIsPauseModalVisible(false);
           handleCloseModal();
@@ -1031,11 +1122,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.sm,
   },
+  tabGroup: {
+    flexDirection: 'row',
+    flex: 1,
+    borderRadius: BorderRadius.xl,
+    backgroundColor: 'rgba(255, 255, 255, 0.80)',
+    padding: Spacing.xs,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 4,
+  },
   tab: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing.xxs,
+    zIndex: 1,
+  },
+  tabPill: {
+    position: 'absolute',
+    top: Spacing.xs,
+    bottom: Spacing.xs,
+    left: Spacing.xs,
+    backgroundColor: Colors.gray100,
+    borderRadius: BorderRadius.lg,
+    zIndex: 0,
   },
   label: {
     ...Typography.caption1Regular,

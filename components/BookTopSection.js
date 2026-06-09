@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, Text, Image, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, Image, StyleSheet } from 'react-native';
 import { Colors, Typography, Spacing, BorderRadius } from '../styles';
+import Skeleton from './Skeleton';
 
 /**
  * BookTopSection Component
@@ -37,7 +38,7 @@ export default function BookTopSection({
         {/* Book Cover */}
         <View style={styles.bookCover}>
           {isLoading ? (
-            <ActivityIndicator size="large" color={Colors.primary500} />
+            <Skeleton width={164} height={246} borderRadius={8} />
           ) : coverImage ? (
             <Image
               source={typeof coverImage === 'string' ? { uri: coverImage } : coverImage}
@@ -51,9 +52,18 @@ export default function BookTopSection({
 
         {/* Book Data */}
         <View style={styles.bookData}>
-          <Text style={styles.bookTitle}>{bookTitle || ''}</Text>
-          {bookSubtitle && <Text style={styles.bookSubtitle}>{bookSubtitle}</Text>}
-          <Text style={styles.bookAuthor}>{author || ''}</Text>
+          {isLoading ? (
+            <>
+              <Skeleton width={160} height={22} borderRadius={6} />
+              <Skeleton width={100} height={16} borderRadius={6} style={{ marginTop: Spacing.sm }} />
+            </>
+          ) : (
+            <>
+              <Text style={styles.bookTitle}>{bookTitle || ''}</Text>
+              {bookSubtitle && <Text style={styles.bookSubtitle}>{bookSubtitle}</Text>}
+              <Text style={styles.bookAuthor}>{author || ''}</Text>
+            </>
+          )}
         </View>
       </View>
     </View>

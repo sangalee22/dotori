@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Spacing, Typography } from '../styles';
 import FeedItem from '../components/FeedItem';
 import SimbolOutlineIcon from '../components/SimbolOutlineIcon';
-import { fetchBookDetail, cleanAuthorName } from '../services/aladinApi';
+import { searchBooks, cleanAuthorName } from '../services/aladinApi';
 
 const PAGE_SIZE = 15;
 
@@ -40,12 +40,21 @@ export default function DotoriRoomListScreen({ reviews = [], currentUser, active
 
   const getBook = (item) => {
     const isbn = item.bookIsbn ?? item.isbn;
-    // API 데이터만 사용 — Firestore의 item.book은 무시 (잘못된 데이터 방지)
-    if (isbn && bookCache[isbn]) return bookCache[isbn];
-    // 내 readingBooks에 있으면 신뢰할 수 있는 데이터
+    // 리뷰 작성 시 연결된 책 정보를 최우선으로 사용 (API 캐시보다 신뢰도 높음)
+    // cover만 bookCache로 보완하고, 책 자체(title/author)는 Firestore 데이터 유지
+    if (item.book?.title) {
+      // API 캐시 커버 우선 (Firestore 저장 URL이 만료됐을 수 있음), 없으면 Firestore URL
+      const cover = (isbn && bookCache[isbn]?.cover) || item.book.cover;
+      return { ...item.book, cover };
+    }
+    if (item.bookTitle) {
+      const cover = (isbn && bookCache[isbn]?.cover) || item.bookCover;
+      return { title: item.bookTitle, author: item.bookAuthor, cover };
+    }
     const found = readingBooks.find(b => String(b.isbn) === String(isbn));
     if (found) return { title: found.title, author: cleanAuthorName(found.author), cover: found.coverImage ?? found.cover };
-    return null; // API 로드 전엔 null (잘못된 Firestore 데이터 표시 안 함)
+    if (isbn && bookCache[isbn]) return bookCache[isbn];
+    return null;
   };
 
   // ISBN별 책 정보를 Aladin API로 조회 → 전역 캐시 + Firestore 동기화
@@ -58,16 +67,25 @@ export default function DotoriRoomListScreen({ reviews = [], currentUser, active
     if (isbns.length === 0) return;
 
     isbns.forEach(async (isbn) => {
+      const sampleItem = filtered.find(item => (item.bookIsbn ?? item.isbn) === isbn);
+      const storedTitle = sampleItem?.book?.title || sampleItem?.bookTitle;
+      if (!storedTitle) return;
       try {
-        const detail = await fetchBookDetail(isbn);
-        if (detail?.cover) {
-          const bookData = {
-            title: detail.title.split(' - ')[0].trim(),
-            author: cleanAuthorName(detail.author),
-            cover: detail.cover,
-          };
-          onBookCacheUpdate?.(isbn, bookData);
-          onUpdateBookInfo?.(isbn, bookData);
+        const results = await searchBooks(storedTitle, 'Title', 3);
+        if (!results?.length) return;
+        const norm = (s) => (s || '').split(' - ')[0].trim().toLowerCase();
+        const match = results.find(b => {
+          const t = norm(b.title);
+          const s = norm(storedTitle);
+          return t === s || t.includes(s) || s.includes(t);
+        }) || results[0];
+        if (match?.coverImage) {
+          const cover = match.coverImage.replace(/^http:\/\/image\.aladin\.co\.kr/, 'https://image.aladin.co.kr');
+          onBookCacheUpdate?.(isbn, {
+            title: (match.title || '').split(' - ')[0].trim() || storedTitle,
+            author: cleanAuthorName(match.author),
+            cover,
+          });
         }
       } catch {}
     });

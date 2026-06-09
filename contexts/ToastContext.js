@@ -8,14 +8,16 @@ export function ToastProvider({ children }) {
     visible: false,
     message: '',
     duration: 2000,
+    requestId: 0,
   });
 
   const showToast = useCallback((message, duration = 2000) => {
-    setToast({
+    setToast(prev => ({
       visible: true,
       message,
       duration,
-    });
+      requestId: prev.requestId + 1,
+    }));
   }, []);
 
   const hideToast = useCallback(() => {
@@ -33,6 +35,7 @@ export function ToastProvider({ children }) {
         message={toast.message}
         duration={toast.duration}
         onHide={hideToast}
+        requestId={toast.requestId}
       />
     </ToastContext.Provider>
   );

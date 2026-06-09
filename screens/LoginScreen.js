@@ -11,12 +11,13 @@ import GoogleLoginButton from '../components/GoogleLoginButton';
 import { loginWithKakao, loginWithGoogle, getGoogleRedirectResult } from '../services/auth';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
+import { makeRedirectUri } from 'expo-auth-session';
 
 WebBrowser.maybeCompleteAuthSession();
 
 // Google OAuth Client IDs — Firebase Console > Authentication > Sign-in method > Google > Web client ID
 const GOOGLE_WEB_CLIENT_ID = '642592573898-elm8i8sjah4npkim86jcgr03vuarp41k.apps.googleusercontent.com';
-const GOOGLE_IOS_CLIENT_ID = '642592573898-elm8i8sjah4npkim86jcgr03vuarp41k.apps.googleusercontent.com'; // iOS 전용 Client ID 발급 전까지 Web ID 사용
+const GOOGLE_IOS_CLIENT_ID = '642592573898-4usjhm7pucep31piahrnj4sf4bdbgsbg.apps.googleusercontent.com';
 const GOOGLE_ANDROID_CLIENT_ID = '642592573898-elm8i8sjah4npkim86jcgr03vuarp41k.apps.googleusercontent.com'; // Android 전용 Client ID 발급 전까지 Web ID 사용
 
 export default function LoginScreen({ onLogin, onSignUp }) {
@@ -27,6 +28,9 @@ export default function LoginScreen({ onLogin, onSignUp }) {
     clientId: GOOGLE_WEB_CLIENT_ID,
     iosClientId: GOOGLE_IOS_CLIENT_ID,
     androidClientId: GOOGLE_ANDROID_CLIENT_ID,
+    redirectUri: makeRedirectUri({
+      native: 'com.googleusercontent.apps.642592573898-4usjhm7pucep31piahrnj4sf4bdbgsbg:/oauth2redirect',
+    }),
   });
 
   // 웹: Google redirect 로그인 후 돌아왔을 때 결과 처리
@@ -158,6 +162,16 @@ export default function LoginScreen({ onLogin, onSignUp }) {
               <GoogleLoginButton />
             </TouchableOpacity>
           </View>
+
+          {__DEV__ && (
+            <TouchableOpacity
+              onPress={() => onLogin?.({ id: 'dev_test_user', email: 'test@dotori.dev', displayName: '테스트유저' })}
+              activeOpacity={0.7}
+              style={styles.devButton}
+            >
+              <Text style={styles.devButtonText}>🛠 테스트로 시작하기 (개발용)</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </SafeAreaView>
     </View>
@@ -223,5 +237,18 @@ const styles = StyleSheet.create({
     ...Typography.headline3Medium,
     color: Colors.white,
     marginTop: Spacing.md,
+  },
+  devButton: {
+    marginTop: Spacing.md,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  devButtonText: {
+    ...Typography.body2Medium,
+    color: Colors.white,
   },
 });

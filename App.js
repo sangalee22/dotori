@@ -33,10 +33,10 @@ import ModalPopup from './components/ModalPopup';
 import SettingIcon from './components/SettingIcon';
 import IconButton from './components/IconButton';
 import { registerUser, logout as firebaseLogout, withdrawUser, onAuthChange } from './services/auth';
-import { getUser, getUserBooks, getReadingRecords, getReviews, updateReviewsBookInfo } from './services/firestore';
+import { getUser, getUserBooks, getReadingRecords, getReviews, updateReviewsBookInfo, getBookReaderCount } from './services/firestore';
 import { Colors, Typography, FontWeights } from './styles';
 import { Spacing, BorderRadius } from './styles/spacing';
-import { fetchBestsellers, fetchNewBooks, fetchBookDetail, CATEGORY_LIST } from './services/aladinApi';
+import { fetchBestsellers, fetchNewBooks, fetchBookDetail, searchBooks, cleanAuthorName, CATEGORY_LIST } from './services/aladinApi';
 import { formatTimeAgo } from './utils/formatTimeAgo';
 
 // 웹에서 Min Sans 폰트 로드
@@ -72,6 +72,7 @@ export default function App() {
   const [signUpNickname, setSignUpNickname] = React.useState(''); // Store nickname during sign-up
   const [activeTab, setActiveTab] = React.useState('종합');
   const [activeBestReviewPage, setActiveBestReviewPage] = React.useState(0);
+  const [bestReviews, setBestReviews] = React.useState([]);
   const [activeBottomTab, setActiveBottomTab] = React.useState('home');
   const [showMySettings, setShowMySettings] = React.useState(false);
   const [feedTab, setFeedTab] = React.useState('all'); // 'all' | 'mine'
@@ -128,7 +129,11 @@ export default function App() {
   const [bookDetailOpenReviewModal, setBookDetailOpenReviewModal] = React.useState(false); // Whether to auto-open review modal
   const [bookDetailReviewInitialPage, setBookDetailReviewInitialPage] = React.useState(0);
   const [bookDetailReviewInitialImages, setBookDetailReviewInitialImages] = React.useState([]);
+  const [bookDetailTargetReviewId, setBookDetailTargetReviewId] = React.useState(null);
   const bookListScrollRef = React.useRef(null);
+  const [activeBestIndex, setActiveBestIndex] = React.useState(0);
+  const [carouselReady, setCarouselReady] = React.useState(false);
+  const bestAutoSlideRef = React.useRef(null);
 
   // 알라딘 API 상태 관리
   const [bestBooks, setBestBooks] = React.useState([]);
@@ -254,23 +259,45 @@ export default function App() {
     AsyncStorage.setItem('wantToReadBooks', JSON.stringify(wantToReadBooks)).catch(() => {});
   }, [wantToReadBooks]);
 
-  // bookCache: AsyncStorage에서 로드
+  // bookCache: AsyncStorage에서 로드 (버전 불일치 시 초기화 → 제목 검색으로 재조회)
+  const BOOK_CACHE_VERSION = 2;
   React.useEffect(() => {
     AsyncStorage.getItem('bookCache').then(stored => {
-      if (stored) setBookCache(JSON.parse(stored));
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.__v !== BOOK_CACHE_VERSION) {
+          AsyncStorage.removeItem('bookCache').catch(() => {});
+          return;
+        }
+        const { __v, ...cache } = parsed;
+        setBookCache(cache);
+      }
     }).catch(() => {});
   }, []);
 
   // bookCache: 변경 시 AsyncStorage에 저장
   React.useEffect(() => {
     if (Object.keys(bookCache).length > 0) {
-      AsyncStorage.setItem('bookCache', JSON.stringify(bookCache)).catch(() => {});
+      AsyncStorage.setItem('bookCache', JSON.stringify({ __v: BOOK_CACHE_VERSION, ...bookCache })).catch(() => {});
     }
   }, [bookCache]);
 
   // Firestore 리뷰 → 앱 형식 변환
   const normalizeReview = (r) => {
     const createdAt = r.createdAt?.toDate?.() ? r.createdAt.toDate().toISOString() : (r.createdAt ?? new Date().toISOString());
+    const toHttps = (url) => url?.replace(/^http:\/\/image\.aladin\.co\.kr/, 'https://image.aladin.co.kr') || null;
+
+    // Firestore 플랫 필드(bookTitle/bookAuthor/bookCover/isbn) 우선 — 리뷰 작성 시 저장된 원본
+    // 없으면 중첩 book 객체 사용 (앱에서 작성한 리뷰)
+    let book;
+    if (r.bookTitle) {
+      book = { title: r.bookTitle, author: r.bookAuthor || '', cover: toHttps(r.bookCover) };
+    } else if (r.book?.title) {
+      book = { title: r.book.title, author: r.book.author || '', cover: toHttps(r.book.cover || r.book.coverImage) };
+    } else {
+      book = null;
+    }
+
     return {
       ...r,
       bookIsbn: r.bookIsbn ?? r.isbn,
@@ -279,24 +306,27 @@ export default function App() {
       user: { name: r.userNickname ?? r.user?.name ?? '익명', profileImage: r.user?.profileImage ?? null },
       likes: Array.isArray(r.likes) ? r.likes : [],
       comments: r.commentCount ?? (Array.isArray(r.comments) ? r.comments.length : r.comments ?? 0),
-      book: r.book ?? (r.bookTitle ? { title: r.bookTitle, author: r.bookAuthor, cover: r.bookCover } : null),
+      book,
     };
   };
 
-  // Load reviews: AsyncStorage first, then merge with Firestore
+  // Load reviews: Firestore가 primary source, AsyncStorage는 로컬 전용 리뷰 보완용
   React.useEffect(() => {
     const loadReviews = async () => {
+      // 1. AsyncStorage에서 로컬 리뷰 로드 (normalizeReview 적용)
       try {
         const stored = await AsyncStorage.getItem('reviews');
         const local = stored ? JSON.parse(stored) : [];
-        if (local.length > 0) setReviews(local);
+        if (local.length > 0) setReviews(local.map(normalizeReview));
       } catch {}
+      // 2. Firestore에서 전체 리뷰 로드 — Firestore 데이터가 항상 우선
       try {
         const fbReviews = await getReviews();
         if (fbReviews.length > 0) {
           const normalized = fbReviews.map(normalizeReview);
           setReviews(prev => {
             const fbIds = new Set(normalized.map(r => r.id));
+            // Firestore 리뷰가 같은 ID의 로컬 리뷰를 덮어씀
             const merged = [...normalized, ...prev.filter(r => !fbIds.has(r.id))];
             return merged.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
           });
@@ -546,6 +576,9 @@ export default function App() {
     setCurrentView('bookDetail');
   };
 
+  const activeCategoryObj = CATEGORY_LIST.find(c => c.name === activeTab);
+  const effectiveCategoryId = activeCategoryObj?.id ?? 0;
+
   // 알라딘 API로 베스트셀러 데이터 가져오기
   React.useEffect(() => {
     const loadBestsellers = async () => {
@@ -553,12 +586,11 @@ export default function App() {
       setBooksError(null);
 
       try {
-        const books = await fetchBestsellers(activeTab, 8);
+        const books = await fetchBestsellers(effectiveCategoryId, 8);
         setBestBooks(books);
       } catch (error) {
         console.error('베스트셀러 로딩 오류:', error);
         setBooksError('베스트셀러를 불러오는데 실패했습니다.');
-        // 오류 발생 시 빈 배열로 설정
         setBestBooks([]);
       } finally {
         setIsLoadingBooks(false);
@@ -566,9 +598,49 @@ export default function App() {
     };
 
     loadBestsellers();
-  }, [activeTab]);
+  }, [effectiveCategoryId]);
 
   const currentBooks = bestBooks;
+
+  const carouselCardWidth = 141;
+  const carouselSnap = carouselCardWidth;
+  const carouselSidePadding = (windowWidth - carouselCardWidth) / 2;
+
+  // 무한 루프용 3배 복제 배열
+  const loopedBooks = currentBooks.length > 0
+    ? [...currentBooks, ...currentBooks, ...currentBooks]
+    : [];
+  const loopOffset = currentBooks.length;
+
+  // 책 로드 시 중간 복사본으로 초기화 (opacity 0 → 위치 이동 → opacity 1)
+  React.useEffect(() => {
+    if (currentBooks.length === 0) {
+      setCarouselReady(false);
+      return;
+    }
+    setCarouselReady(false);
+    const idx = loopOffset;
+    const t = setTimeout(() => {
+      bookListScrollRef.current?.scrollTo({ x: idx * carouselSnap, animated: false });
+      setActiveBestIndex(idx);
+      setCarouselReady(true);
+    }, 50);
+    return () => clearTimeout(t);
+  }, [currentBooks.length]);
+
+  // 주간 베스트 자동 슬라이드
+  React.useEffect(() => {
+    if (currentBooks.length === 0) return;
+    clearInterval(bestAutoSlideRef.current);
+    bestAutoSlideRef.current = setInterval(() => {
+      setActiveBestIndex(prev => {
+        const next = prev + 1;
+        bookListScrollRef.current?.scrollTo({ x: next * carouselSnap, animated: true });
+        return next;
+      });
+    }, 4000);
+    return () => clearInterval(bestAutoSlideRef.current);
+  }, [currentBooks.length, carouselSnap]);
 
   // 신간 데이터 가져오기
   React.useEffect(() => {
@@ -589,65 +661,107 @@ export default function App() {
     loadNewBooks();
   }, []);
 
-  // Best review data - max 6 items
-  const bestReviews = [
-    {
-      bookTitle: '사탄탱고',
-      bookSubtitle: '2025 노벨문학상 수상작가',
-      author: '크러스너호르커이 라슬로',
-      readerCount: 34,
-      reviewerName: 'User name',
-      reviewDate: '2025.12.12',
-      reviewText: '잿빛 미래 속에서도 서로를 붙잡는 마음만은 끝내 살아남는다는 걸, 아주 고요하게 증명하는 이야기.',
-    },
-    {
-      bookTitle: '프로젝트 헤일리메리',
-      bookSubtitle: '앤디 위어 우주 3부작',
-      author: '앤디 위어',
-      readerCount: 12,
-      reviewerName: 'User name',
-      reviewDate: '2025.12.12',
-      reviewText: '잿빛 미래 속에서도 서로를 붙잡는 마음만은 끝내 살아남는다는 걸, 아주 고요하게 증명하는 이야기. 잿빛 미래 속에서도 서로를 붙잡는 마음만은 끝내 살아남는다는 걸, 아주 고요하게 증명하는 이야기.',
-    },
-    {
-      bookTitle: '지적 생활의 즐거움',
-      author: 'P.G.해머튼',
-      readerCount: 34,
-      reviewerName: 'User name',
-      reviewDate: '2025.12.12',
-      reviewText: '잿빛 미래 속에서도 서로를 붙잡는 마음만은 끝내 살아남는다는 걸, ',
-    },
-    {
-      bookTitle: '싯다르타',
-      author: '헤르만 헤세',
-      readerCount: 28,
-      reviewerName: 'User name',
-      reviewDate: '2025.12.12',
-      reviewText: '영혼의 여정을 따라가며 삶의 본질을 깨닫게 하는 철학적 소설.',
-    },
-    {
-      bookTitle: '모우어',
-      author: '천선란',
-      readerCount: 19,
-      reviewerName: 'User name',
-      reviewDate: '2025.12.12',
-      reviewText: 'SF의 상상력과 인간에 대한 깊은 통찰이 어우러진 작품.',
-    },
-    {
-      bookTitle: '혼모노',
-      author: '성해나',
-      readerCount: 42,
-      reviewerName: 'User name',
-      reviewDate: '2025.12.12',
-      reviewText: '진짜와 가짜 사이에서 고민하게 만드는 이야기.',
-    },
-  ];
+  // 지난주(월~일) 범위 계산
+  const getLastWeekRange = () => {
+    const today = new Date();
+    const dow = today.getDay(); // 0=일, 1=월
+    const daysSinceMonday = dow === 0 ? 6 : dow - 1;
+    const thisMonday = new Date(today);
+    thisMonday.setDate(today.getDate() - daysSinceMonday);
+    thisMonday.setHours(0, 0, 0, 0);
+    const lastMonday = new Date(thisMonday);
+    lastMonday.setDate(thisMonday.getDate() - 7);
+    const lastSunday = new Date(thisMonday);
+    lastSunday.setDate(thisMonday.getDate() - 1);
+    lastSunday.setHours(23, 59, 59, 999);
+    return { from: lastMonday, to: lastSunday };
+  };
+
+  React.useEffect(() => {
+    if (reviews.length === 0) return;
+    const loadBestReviews = async () => {
+      const { from, to } = getLastWeekRange();
+      let candidates = reviews
+        .filter(r => {
+          const d = new Date(r.createdAt);
+          return d >= from && d <= to;
+        })
+        .sort((a, b) => (b.likes?.length || 0) - (a.likes?.length || 0))
+        .slice(0, 6);
+
+      // 지난주 리뷰가 부족하면 전체에서 좋아요 순으로 fallback
+      if (candidates.length < 6) {
+        const fallback = reviews
+          .sort((a, b) => (b.likes?.length || 0) - (a.likes?.length || 0))
+          .slice(0, 6);
+        candidates = fallback;
+      }
+
+
+      const toHttps = (url) => url?.replace(/^http:\/\/image\.aladin\.co\.kr/, 'https://image.aladin.co.kr');
+
+      const enrichCover = async (review) => {
+        if (!review.book?.title) return review;
+
+        const isbn = review.bookIsbn;
+        const title = review.book.title;
+
+        // ISBN이 캐시에 있으면 바로 사용
+        const cached = isbn && bookCache[isbn];
+        if (cached?.cover) {
+          return { ...review, book: { ...review.book, cover: toHttps(cached.cover) } };
+        }
+
+        // 제목으로 검색 → ISBN이 알라딘 API와 불일치해도 정확한 책 커버 획득
+        try {
+          const results = await searchBooks(title, 'Title', 3);
+          if (results?.length) {
+            const norm = (s) => (s || '').split(' - ')[0].trim().toLowerCase();
+            const match = results.find(b => {
+              const t = norm(b.title);
+              const s = norm(title);
+              return t === s || t.includes(s) || s.includes(t);
+            }) || results[0];
+            if (match?.coverImage) {
+              const cover = toHttps(match.coverImage);
+              if (isbn) setBookCache(prev => ({ ...prev, [isbn]: { title: (match.title || '').split(' - ')[0].trim() || title, author: cleanAuthorName(match.author), cover } }));
+              return { ...review, book: { ...review.book, cover } };
+            }
+          }
+        } catch {}
+
+        // 검색 실패 시 Firestore URL (http→https 변환)
+        const storedCover = toHttps(review.book.cover || review.book.coverImage);
+        return storedCover !== review.book.cover
+          ? { ...review, book: { ...review.book, cover: storedCover } }
+          : review;
+      };
+
+      const enriched = await Promise.all(candidates.map(enrichCover));
+
+      // isbn별 읽는 중 유저 수 조회
+      const withReaderCount = await Promise.all(enriched.map(async (review) => {
+        const isbn = review.bookIsbn;
+        if (!isbn) return { ...review, readerCount: 0 };
+        try {
+          const count = await getBookReaderCount(isbn);
+          return { ...review, readerCount: count };
+        } catch {
+          return { ...review, readerCount: 0 };
+        }
+      }));
+
+      setBestReviews(withReaderCount);
+    };
+    loadBestReviews();
+  }, [reviews]);
 
   // Reset scroll position when tab changes
   React.useEffect(() => {
-    if (bookListScrollRef.current) {
-      bookListScrollRef.current.scrollTo({ x: 0, animated: true });
-    }
+    if (currentBooks.length === 0) return;
+    const initialIndex = currentBooks.length;
+    bookListScrollRef.current?.scrollTo({ x: initialIndex * carouselSnap, animated: false });
+    setActiveBestIndex(initialIndex);
   }, [activeTab]);
 
   // Calculate card width for best review
@@ -750,11 +864,11 @@ export default function App() {
               getUser(userInfo.id),
               getReviews(),
             ]);
-            if (userData) {
-              const fullUser = { id: userInfo.id, ...userData };
-              setCurrentUser(fullUser);
-              await AsyncStorage.setItem('currentUser', JSON.stringify(fullUser));
-            }
+            const fullUser = userData
+              ? { id: userInfo.id, ...userData, profileImage: userData.profileImage || userInfo.profileImage || null }
+              : { id: userInfo.id, nickname: userInfo.displayName || '테스트유저', email: userInfo.email || '', profileImage: userInfo.profileImage || null };
+            setCurrentUser(fullUser);
+            await AsyncStorage.setItem('currentUser', JSON.stringify(fullUser));
             if (fbReviews.length > 0) setReviews(fbReviews.map(normalizeReview));
             setIsLoggedIn(true);
           }}
@@ -881,17 +995,18 @@ export default function App() {
         {recentBooks.length > 0 && (
           <View style={styles.section}>
             <View style={[styles.sectionHeader, { marginBottom: 8 }]}>
-              <SectionTitle>최근 이런 책에 관심이 가졌네요!</SectionTitle>
+              <SectionTitle>최근 이런 책에 관심을 가졌네요!</SectionTitle>
             </View>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               style={styles.bestList}
+              contentContainerStyle={{ paddingHorizontal: Spacing.md }}
             >
               {recentBooks.slice(0, 4).map((book, index) => (
                 <BestBook
                   key={book.isbn || index}
-                  rank={4}
+                  rank={null}
                   title={book.title}
                   author={book.author}
                   coverImage={book.coverImage}
@@ -906,30 +1021,30 @@ export default function App() {
 
 
         {/* Weekly Best Section */}
-        <View style={styles.section}>
-          <View style={[styles.sectionHeader, { marginBottom: Spacing.sm }]}>
-            <SectionTitle>주간 베스트</SectionTitle>
-            <MoreButton onPress={() => {
-              setPreviousView(currentView);
-              setCurrentView('weeklyBestDetail');
-            }} />
-          </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.tabs}
-            style={styles.tabScrollView}
-          >
-            {CATEGORY_LIST.map((category) => (
-              <TabElement
-                key={category.id}
-                active={activeTab === category.name}
-                onPress={() => setActiveTab(category.name)}
-              >
-                {category.label}
-              </TabElement>
-            ))}
-          </ScrollView>
+        <View style={[styles.sectionHeader, { marginBottom: Spacing.sm, paddingHorizontal: Spacing.md }]}>
+          <SectionTitle>주간 베스트</SectionTitle>
+          <MoreButton onPress={() => {
+            setPreviousView(currentView);
+            setCurrentView('weeklyBestDetail');
+          }} />
+        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabs}
+          style={[styles.tabScrollView, { paddingHorizontal: Spacing.md }]}
+        >
+          {CATEGORY_LIST.map((category) => (
+            <TabElement
+              key={category.id}
+              active={activeTab === category.name}
+              onPress={() => setActiveTab(category.name)}
+            >
+              {category.label}
+            </TabElement>
+          ))}
+        </ScrollView>
+        <View style={styles.weeklyBestSection}>
           {isLoadingBooks ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={Colors.primary500} />
@@ -944,18 +1059,45 @@ export default function App() {
               ref={bookListScrollRef}
               horizontal
               showsHorizontalScrollIndicator={false}
-              style={styles.bestList}
+              snapToInterval={carouselSnap}
+              decelerationRate="fast"
+              style={{ height: 310, opacity: carouselReady ? 1 : 0 }}
+              contentContainerStyle={{ paddingHorizontal: carouselSidePadding, alignItems: 'flex-start' }}
+              onScrollBeginDrag={() => clearInterval(bestAutoSlideRef.current)}
+              onMomentumScrollEnd={(e) => {
+                const len = currentBooks.length;
+                let index = Math.round(e.nativeEvent.contentOffset.x / carouselSnap);
+                // 경계 처리: 첫/끝 복사본이면 중간 복사본으로 점프
+                if (index < len) {
+                  index = index + len;
+                  bookListScrollRef.current?.scrollTo({ x: index * carouselSnap, animated: false });
+                } else if (index >= len * 2) {
+                  index = len + (index % len);
+                  bookListScrollRef.current?.scrollTo({ x: index * carouselSnap, animated: false });
+                }
+                setActiveBestIndex(index);
+                // 자동 슬라이드 재시작
+                clearInterval(bestAutoSlideRef.current);
+                bestAutoSlideRef.current = setInterval(() => {
+                  setActiveBestIndex(prev => {
+                    const next = prev + 1;
+                    bookListScrollRef.current?.scrollTo({ x: next * carouselSnap, animated: true });
+                    return next;
+                  });
+                }, 4000);
+              }}
             >
-              {currentBooks.map((book, index) => (
+              {loopedBooks.map((book, index) => (
                 <BestBook
-                  key={book.isbn || index}
+                  key={`${book.isbn || index}-${index}`}
                   rank={book.rank}
                   title={book.title}
                   author={book.author}
                   coverImage={book.coverImage}
                   isbn={book.isbn}
+                  cardWidth={carouselCardWidth}
+                  isActive={index % currentBooks.length === activeBestIndex % currentBooks.length}
                   onPress={() => {
-                    console.log('📚 책 선택:', book.title, 'ISBN:', book.isbn);
                     const bookData = {
                       isbn: book.isbn,
                       title: book.title,
@@ -967,12 +1109,72 @@ export default function App() {
                     setPreviousView(currentView);
                     setCurrentView('bookDetail');
                   }}
-                  style={{ marginRight: Spacing.md }}
+                  style={null}
                 />
               ))}
             </ScrollView>
           )}
         </View>
+
+        {/* Best Review Section */}
+        <View style={styles.section}>
+          <View style={[styles.sectionHeader, { marginBottom: 8 }]}>
+            <SectionTitle>이번주 베스트 리뷰</SectionTitle>
+          </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.bestReviewList}
+            style={styles.bestReviewScrollView}
+            snapToInterval={snapInterval}
+            decelerationRate="fast"
+            snapToAlignment="start"
+            onScroll={handleBestReviewScroll}
+            scrollEventThrottle={16}
+          >
+            {bestReviews.map((review, index) => {
+              const bookData = {
+                isbn: review.bookIsbn,
+                title: review.book?.title || '',
+                author: review.book?.author || '',
+                coverImage: review.book?.cover || review.book?.coverImage,
+              };
+              return (
+                <BestReviewCard
+                  key={review.id || index}
+                  bookTitle={bookData.title}
+                  author={bookData.author}
+                  coverImage={bookData.coverImage}
+                  readerCount={review.readerCount ?? 0}
+                  reviewerName={review.user?.name || '익명'}
+                  reviewerImage={review.user?.profileImage}
+                  reviewDate={review.createdAt ? new Date(review.createdAt).toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\.\s*/g, '.').replace(/\.$/, '') : ''}
+                  reviewText={review.content || ''}
+                  onBookPress={() => {
+                    setBookDetailInitialTab('info');
+                    setBookDetailOpenReviewModal(false);
+                    setSelectedBook(bookData);
+                    addToRecentBooks(bookData);
+                    setPreviousView(currentView);
+                    setCurrentView('bookDetail');
+                  }}
+                  onReviewPress={() => {
+                    setBookDetailInitialTab('reviews');
+                    setBookDetailOpenReviewModal(false);
+                    setBookDetailTargetReviewId(review.id);
+                    setSelectedBook(bookData);
+                    addToRecentBooks(bookData);
+                    setPreviousView(currentView);
+                    setCurrentView('bookDetail');
+                  }}
+                />
+              );
+            })}
+          </ScrollView>
+              <View style={styles.navigatorContainer}>
+                <Navigator total={bestReviews.length} active={activeBestReviewPage} />
+              </View>
+            </View>
 
         {/* New Books Section */}
         <View style={styles.section}>
@@ -1030,41 +1232,6 @@ export default function App() {
             </ScrollView>
           )}
         </View>
-
-        {/* Best Review Section */}
-        <View style={styles.section}>
-          <View style={[styles.sectionHeader, { marginBottom: 8 }]}>
-            <SectionTitle>베스트 책 리뷰</SectionTitle>
-            <MoreButton onPress={() => console.log('More')} />
-          </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.bestReviewList}
-            style={styles.bestReviewScrollView}
-            snapToInterval={snapInterval}
-            decelerationRate="fast"
-            snapToAlignment="start"
-            onScroll={handleBestReviewScroll}
-            scrollEventThrottle={16}
-          >
-            {bestReviews.map((review, index) => (
-              <BestReviewCard
-                key={index}
-                bookTitle={review.bookTitle}
-                bookSubtitle={review.bookSubtitle}
-                author={review.author}
-                readerCount={review.readerCount}
-                reviewerName={review.reviewerName}
-                reviewDate={review.reviewDate}
-                reviewText={review.reviewText}
-              />
-            ))}
-          </ScrollView>
-              <View style={styles.navigatorContainer}>
-                <Navigator total={bestReviews.length} active={activeBestReviewPage} />
-              </View>
-            </View>
           </ScrollView>
           )}
 
@@ -1092,15 +1259,12 @@ export default function App() {
                 } catch (e) {}
               }}
               onUpdateBookInfo={async (isbn, bookData) => {
+                // book 데이터 없는 리뷰에만 Firestore 업데이트 (bookTitle 있는 리뷰는 건드리지 않음)
                 updateReviewsBookInfo(isbn, bookData).catch(() => {});
-                setReviews(prev => prev.map(r =>
-                  String(r.bookIsbn ?? r.isbn) === String(isbn)
-                    ? { ...r, book: bookData }
-                    : r
-                ));
               }}
               onBookPress={(book) => {
                 setSelectedBook(book);
+                addToRecentBooks(book);
                 setCurrentView('bookDetail');
               }}
             />
@@ -1206,7 +1370,6 @@ export default function App() {
 
       {/* Bottom Navigation */}
       <View style={styles.bottomNavContainer}>
-        <BlurView intensity={15} tint="light" style={styles.bottomNavBlur} />
         <SafeAreaView style={styles.bottomNavSafeArea} edges={['bottom']}>
           <BottomNavigation
             activeTab={activeBottomTab}
@@ -1261,6 +1424,7 @@ export default function App() {
               setBookDetailOpenReviewModal(false);
               setBookDetailReviewInitialPage(0);
               setBookDetailReviewInitialImages([]);
+              setBookDetailTargetReviewId(null);
             }}
             onMenu={() => console.log('Menu pressed')}
             onCreateRoom={(bookData) => {
@@ -1275,6 +1439,7 @@ export default function App() {
             openReviewModal={bookDetailOpenReviewModal}
             reviewInitialPage={bookDetailReviewInitialPage}
             reviewInitialImages={bookDetailReviewInitialImages}
+            targetReviewId={bookDetailTargetReviewId}
             reviews={reviews}
             onAddReview={handleAddReview}
             onEditReview={handleEditReview}
@@ -1493,11 +1658,17 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(255, 255, 255, 0.80)',
   },
   bottomNavSafeArea: {
     position: 'relative',
     zIndex: 1,
+  },
+  weeklyBestSection: {
+    backgroundColor: Colors.gray50,
+    paddingTop: Spacing.xxl,
+    paddingBottom: Spacing.xl,
+    marginBottom: 60,
+    marginTop: Spacing.sm,
   },
   section: {
     paddingHorizontal: Spacing.md,
@@ -1609,7 +1780,6 @@ const styles = StyleSheet.create({
   },
   bestList: {
     marginHorizontal: -Spacing.md,
-    paddingHorizontal: Spacing.md,
   },
   newBooksList: {
     marginHorizontal: -Spacing.md,
