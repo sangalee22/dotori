@@ -13,6 +13,10 @@ dist/
 # macOS
 .DS_Store
 
+# ios build artifacts
+ios/Pods/
+ios/build/
+
 # claude
 .claude/
 
