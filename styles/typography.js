@@ -24,6 +24,7 @@ export const Typography = {
     fontFamily: 'Min Sans',
     fontSize: 20,
     fontWeight: FontWeights.bold,
+    lineHeight: 27,
   },
   headline2Medium: {
     fontFamily: 'Min Sans',

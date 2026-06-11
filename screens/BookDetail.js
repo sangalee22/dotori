@@ -1570,7 +1570,7 @@ export default function BookDetail({
           animationType="none"
           onRequestClose={handleCloseSortModal}
         >
-          <Pressable style={styles.reviewModalOverlay} onPress={handleCloseSortModal}>
+          <Pressable style={styles.sortModalOverlay} onPress={handleCloseSortModal}>
             <Animated.View
               style={[
                 styles.sortModalContainer,
@@ -2070,6 +2070,11 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  sortModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'flex-end',
   },
   sortModalContainer: {

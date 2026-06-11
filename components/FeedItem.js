@@ -263,13 +263,13 @@ export default function FeedItem({
           <Text style={styles.userName}>{user.name}</Text>
           <Text style={styles.timeAgo}>{timeAgo}</Text>
         </View>
-        {isCompleted ? (
-          <View style={styles.completedBadge}>
-            <Text style={styles.completedText}>완독</Text>
-          </View>
-        ) : page && page > 0 ? (
+        {page && page > 0 ? (
           <View style={styles.pageBadge}>
             <Text style={styles.pageText}>{page} Page</Text>
+          </View>
+        ) : isCompleted ? (
+          <View style={styles.completedBadge}>
+            <Text style={styles.completedText}>완독</Text>
           </View>
         ) : null}
       </View>

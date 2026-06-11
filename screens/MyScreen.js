@@ -4,6 +4,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { updateUser } from '../services/firestore';
+import { storage, auth } from '../services/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { signInAnonymously } from 'firebase/auth';
 import { Colors, Spacing, Typography, BorderRadius } from '../styles';
 import UserProfile from '../components/UserProfile';
 import IconButton from '../components/IconButton';
@@ -40,6 +43,15 @@ function GoogleIcon() {
       <Path d="M20 30c2.7 0 4.964-.895 6.618-2.423l-3.232-2.509c-.895.6-2.04.955-3.386.955-2.605 0-4.81-1.759-5.595-4.123h-3.341v2.59A9.996 9.996 0 0020 30z" fill="#34A853"/>
       <Path d="M14.405 21.9a6.003 6.003 0 010-3.8v-2.59h-3.341a10.002 10.002 0 000 8.98l3.341-2.59z" fill="#FBBC05"/>
       <Path d="M20 13.977c1.468 0 2.786.505 3.823 1.496l2.868-2.868C24.959 10.99 22.695 10 20 10a9.996 9.996 0 00-8.936 5.51l3.341 2.59C15.19 15.736 17.395 13.977 20 13.977z" fill="#EA4335"/>
+    </Svg>
+  );
+}
+
+function AppleIcon() {
+  return (
+    <Svg width={32} height={32} viewBox="0 0 40 40">
+      <Circle cx="20" cy="20" r="20" fill="#000000"/>
+      <Path d="M21.51 12.27C22.18 11.46 22.63 10.36 22.5 9.25C21.54 9.29 20.38 9.88 19.69 10.69C19.07 11.41 18.52 12.54 18.68 13.62C19.75 13.7 20.84 13.08 21.51 12.27ZM22.49 13.85C20.91 13.75 19.57 14.74 18.82 14.74C18.07 14.74 16.92 13.9 15.67 13.92C14.05 13.95 12.55 14.85 11.72 16.28C10.03 19.14 11.28 23.38 12.92 25.7C13.72 26.84 14.69 28.1 15.97 28.06C17.18 28.01 17.65 27.27 19.1 27.27C20.55 27.27 20.97 28.06 22.25 28.03C23.57 28.01 24.41 26.89 25.21 25.75C26.12 24.44 26.49 23.17 26.51 23.1C26.48 23.09 24.13 22.17 24.1 19.38C24.08 17.04 25.95 15.93 26.04 15.87C24.97 14.27 23.3 13.92 22.49 13.85Z" fill="white"/>
     </Svg>
   );
 }
@@ -132,10 +144,19 @@ export default function MyScreen({ reviews = [], currentUser, readingRecords = [
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 1 });
     handleCloseProfileModal();
     if (!result.canceled && result.assets?.length > 0) {
-      const profileImage = result.assets[0].uri;
-      const newUser = { ...user, profileImage };
-      setUser(newUser);
+      const localUri = result.assets[0].uri;
+      setUser(prev => ({ ...prev, profileImage: localUri }));
       try {
+        let profileImage = localUri;
+        if (currentUser?.id) {
+          if (!auth.currentUser) await signInAnonymously(auth).catch(() => {});
+          const response = await fetch(localUri);
+          const blob = await response.blob();
+          const storageRef = ref(storage, `profileImages/${currentUser.id}`);
+          await uploadBytes(storageRef, blob);
+          profileImage = await getDownloadURL(storageRef);
+        }
+        setUser(prev => ({ ...prev, profileImage }));
         if (currentUser?.id) await updateUser(currentUser.id, { profileImage });
         const stored = await AsyncStorage.getItem('currentUser');
         if (stored) {
@@ -143,7 +164,7 @@ export default function MyScreen({ reviews = [], currentUser, readingRecords = [
           await AsyncStorage.setItem('currentUser', JSON.stringify(updated));
           onUpdateUser?.(updated);
         }
-      } catch {}
+      } catch (e) { console.error('프로필 이미지 업로드 실패:', e?.code, e?.message); }
     }
   };
 
@@ -190,14 +211,13 @@ export default function MyScreen({ reviews = [], currentUser, readingRecords = [
     setUser(newUser);
     try {
       if (currentUser?.id) {
-        await updateUser(currentUser.id, { nickname: nicknameInput });
+        await updateUser(currentUser.id, { nickname: nicknameInput, profileImage: user.profileImage ?? null });
       }
       const stored = await AsyncStorage.getItem('currentUser');
-      if (stored) {
-        const updated = { ...JSON.parse(stored), nickname: nicknameInput };
-        await AsyncStorage.setItem('currentUser', JSON.stringify(updated));
-        onUpdateUser?.(updated);
-      }
+      const base = stored ? JSON.parse(stored) : {};
+      const updated = { ...base, nickname: nicknameInput, profileImage: user.profileImage ?? null };
+      await AsyncStorage.setItem('currentUser', JSON.stringify(updated));
+      onUpdateUser?.(updated);
     } catch {}
     setShowProfileEdit(false);
   };
@@ -381,6 +401,9 @@ export default function MyScreen({ reviews = [], currentUser, readingRecords = [
                   </View>
                   <View style={{ opacity: currentUser?.provider === 'google' ? 1 : 0.3 }}>
                     <GoogleIcon />
+                  </View>
+                  <View style={{ opacity: currentUser?.provider === 'apple' ? 1 : 0.3 }}>
+                    <AppleIcon />
                   </View>
                 </View>
               </View>

@@ -1,11 +1,13 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { GoogleAuthProvider, signInWithRedirect, getRedirectResult, signInWithCredential, signOut, onAuthStateChanged } from 'firebase/auth';
+import { GoogleAuthProvider, OAuthProvider, signInWithRedirect, getRedirectResult, signInWithCredential, signInAnonymously, signOut, onAuthStateChanged } from 'firebase/auth';
+import { ref, deleteObject, listAll } from 'firebase/storage';
+import { storage } from './firebase';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import { makeRedirectUri } from 'expo-auth-session';
 import { auth } from './firebase';
-import { getUser, createUser, checkNickname, deleteAllUserData, saveWithdrawalReason } from './firestore';
+import { getUser, getUserByEmail, createUser, checkNickname, deleteAllUserData, saveWithdrawalReason } from './firestore';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -46,8 +48,15 @@ async function exchangeKakaoCode(code, redirectUri) {
     profileImage: profile?.profile_image_url || null,
   };
 
+  if (!auth.currentUser) await signInAnonymously(auth).catch(() => {});
   const existing = await getUser(kakaoId);
-  return { userInfo, isNewUser: !existing };
+  const isNewUser = !existing;
+  let existingProvider = null;
+  if (isNewUser && userInfo.email) {
+    const emailUser = await getUserByEmail(userInfo.email);
+    if (emailUser && emailUser.provider !== 'kakao') existingProvider = emailUser.provider;
+  }
+  return { userInfo, isNewUser, existingProvider };
 }
 
 async function loginWithKakaoWeb() {
@@ -108,8 +117,15 @@ async function loginWithKakaoNative() {
   };
 
   await AsyncStorage.setItem('kakao_access_token', token.accessToken);
+  if (!auth.currentUser) await signInAnonymously(auth).catch(() => {});
   const existing = await getUser(kakaoId);
-  return { userInfo, isNewUser: !existing };
+  const isNewUser = !existing;
+  let existingProvider = null;
+  if (isNewUser && userInfo.email) {
+    const emailUser = await getUserByEmail(userInfo.email);
+    if (emailUser && emailUser.provider !== 'kakao') existingProvider = emailUser.provider;
+  }
+  return { userInfo, isNewUser, existingProvider };
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -127,6 +143,12 @@ export async function loginWithGoogle(idToken = null) {
   const result = await signInWithCredential(auth, credential);
   const firebaseUser = result.user;
   const existing = await getUser(firebaseUser.uid);
+  const isNewUser = !existing;
+  let existingProvider = null;
+  if (isNewUser && firebaseUser.email) {
+    const emailUser = await getUserByEmail(firebaseUser.email);
+    if (emailUser && emailUser.provider !== 'google') existingProvider = emailUser.provider;
+  }
   return {
     userInfo: {
       id: firebaseUser.uid,
@@ -135,7 +157,8 @@ export async function loginWithGoogle(idToken = null) {
       name: firebaseUser.displayName,
       profileImage: firebaseUser.photoURL,
     },
-    isNewUser: !existing,
+    isNewUser,
+    existingProvider,
   };
 }
 
@@ -159,6 +182,45 @@ export async function getGoogleRedirectResult() {
   } catch {
     return null;
   }
+}
+
+export async function loginWithApple() {
+  const AppleAuthentication = require('expo-apple-authentication');
+  const credential = await AppleAuthentication.signInAsync({
+    requestedScopes: [
+      AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+      AppleAuthentication.AppleAuthenticationScope.EMAIL,
+    ],
+  });
+
+  const { identityToken, fullName } = credential;
+  if (!identityToken) throw new Error('Apple ID 토큰이 없습니다.');
+
+  const provider = new OAuthProvider('apple.com');
+  const oauthCredential = provider.credential({ idToken: identityToken });
+  const result = await signInWithCredential(auth, oauthCredential);
+
+  const firebaseUser = result.user;
+  const existing = await getUser(firebaseUser.uid);
+  const isNewUser = !existing;
+  const name = firebaseUser.displayName ||
+    (fullName ? [fullName.givenName, fullName.familyName].filter(Boolean).join(' ') : null);
+  let existingProvider = null;
+  if (isNewUser && firebaseUser.email) {
+    const emailUser = await getUserByEmail(firebaseUser.email);
+    if (emailUser && emailUser.provider !== 'apple') existingProvider = emailUser.provider;
+  }
+  return {
+    userInfo: {
+      id: firebaseUser.uid,
+      provider: 'apple',
+      email: firebaseUser.email,
+      name,
+      profileImage: null,
+    },
+    isNewUser,
+    existingProvider,
+  };
 }
 
 export async function loginWithKakao() {
@@ -190,9 +252,23 @@ export async function checkNicknameAvailability(nickname) {
   return await checkNickname(nickname);
 }
 
+async function deleteStorageFolder(folderRef) {
+  try {
+    const { items, prefixes } = await listAll(folderRef);
+    await Promise.all([
+      ...items.map(item => deleteObject(item).catch(() => {})),
+      ...prefixes.map(prefix => deleteStorageFolder(prefix)),
+    ]);
+  } catch {}
+}
+
 export async function withdrawUser(userId, provider, reasonData) {
   if (reasonData) await saveWithdrawalReason(userId, reasonData).catch(() => {});
   await deleteAllUserData(userId);
+  await Promise.all([
+    deleteObject(ref(storage, `profileImages/${userId}`)).catch(() => {}),
+    deleteStorageFolder(ref(storage, `reviewImages/${userId}`)),
+  ]);
 
   if (provider === 'kakao') {
     const token = await AsyncStorage.getItem('kakao_access_token');

@@ -1,58 +1,30 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, Platform } from 'react-native';
 import { Colors, Typography, Spacing, BorderRadius } from '../styles';
 
-/**
- * Toast Component
- * @param {boolean} visible - Whether the toast is visible
- * @param {string} message - Toast message
- * @param {number} duration - Duration in milliseconds (default: 2000)
- * @param {function} onHide - Callback when toast hides
- * @param {object} style - Additional style overrides
- */
-export default function Toast({ visible, message, duration = 2000, onHide, style, requestId }) {
+export default function Toast({ visible, message, style, requestId }) {
   const opacity = React.useRef(new Animated.Value(0)).current;
   const translateY = React.useRef(new Animated.Value(20)).current;
+  const everShownRef = useRef(false);
 
   useEffect(() => {
     if (visible) {
-      // 진행 중인 애니메이션 즉시 중단 후 재시작 (rapid 호출 대응)
+      everShownRef.current = true;
       opacity.stopAnimation();
       translateY.stopAnimation();
-
       Animated.parallel([
-        Animated.timing(opacity, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: Platform.OS !== 'web',
-        }),
-        Animated.timing(translateY, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: Platform.OS !== 'web',
-        }),
+        Animated.timing(opacity, { toValue: 1, duration: 300, useNativeDriver: Platform.OS !== 'web' }),
+        Animated.timing(translateY, { toValue: 0, duration: 300, useNativeDriver: Platform.OS !== 'web' }),
       ]).start();
-
-      const timer = setTimeout(() => {
-        Animated.parallel([
-          Animated.timing(opacity, {
-            toValue: 0,
-            duration: 300,
-            useNativeDriver: Platform.OS !== 'web',
-          }),
-          Animated.timing(translateY, {
-            toValue: 20,
-            duration: 300,
-            useNativeDriver: Platform.OS !== 'web',
-          }),
-        ]).start(() => {
-          if (onHide) onHide();
-        });
-      }, duration);
-
-      return () => clearTimeout(timer);
+    } else if (everShownRef.current) {
+      opacity.stopAnimation();
+      translateY.stopAnimation();
+      Animated.parallel([
+        Animated.timing(opacity, { toValue: 0, duration: 300, useNativeDriver: Platform.OS !== 'web' }),
+        Animated.timing(translateY, { toValue: 20, duration: 300, useNativeDriver: Platform.OS !== 'web' }),
+      ]).start();
     }
-  }, [visible, duration, onHide, requestId]);
+  }, [visible, requestId]);
 
   return (
     <Animated.View
@@ -78,7 +50,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 80,
     left: '50%',
-    marginLeft: -150, // Half of width (300px / 2)
+    marginLeft: -150,
     width: 300,
     borderRadius: BorderRadius.xl,
     overflow: 'hidden',

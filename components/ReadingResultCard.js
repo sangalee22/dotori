@@ -177,16 +177,16 @@ export default function ReadingResultCard({
           )}
           <View style={[styles.stats, { justifyContent: 'center' }]}>
             <View style={[styles.statItem, { alignItems: 'center' }]}>
-              <Text style={[styles.statValue, { color: STYLE1_TEXT, fontFamily: 'LeeSeoyun', fontSize: 80 }]}>{pagesRead}</Text>
-              <Text style={[styles.statLabel, { color: STYLE1_MUTED, fontFamily: 'LeeSeoyun' }]}>pages</Text>
+              <Text style={[styles.statValue, { color: STYLE1_TEXT, fontFamily: 'LeeSeoyun', fontSize: 80, fontWeight: 'normal' }]}>{pagesRead}</Text>
+              <Text style={[styles.statLabel, { color: STYLE1_MUTED, fontFamily: 'LeeSeoyun', fontWeight: 'normal' }]}>pages</Text>
             </View>
             <View style={[styles.statItem, { alignItems: 'center' }]}>
-              <Text style={[styles.statValue, { color: STYLE1_TEXT, fontFamily: 'LeeSeoyun', fontSize: 80 }]}>{progress}</Text>
-              <Text style={[styles.statLabel, { color: STYLE1_MUTED, fontFamily: 'LeeSeoyun' }]}>progress</Text>
+              <Text style={[styles.statValue, { color: STYLE1_TEXT, fontFamily: 'LeeSeoyun', fontSize: 80, fontWeight: 'normal' }]}>{progress}</Text>
+              <Text style={[styles.statLabel, { color: STYLE1_MUTED, fontFamily: 'LeeSeoyun', fontWeight: 'normal' }]}>progress</Text>
             </View>
             <View style={[styles.statItem, { alignItems: 'center' }]}>
-              <Text style={[styles.statValue, { color: STYLE1_TEXT, fontFamily: 'LeeSeoyun', fontSize: 80 }]}>day {readingDays}</Text>
-              <Text style={[styles.statLabel, { color: STYLE1_MUTED, fontFamily: 'LeeSeoyun' }]}>reading</Text>
+              <Text style={[styles.statValue, { color: STYLE1_TEXT, fontFamily: 'LeeSeoyun', fontSize: 80, fontWeight: 'normal' }]}>day {readingDays}</Text>
+              <Text style={[styles.statLabel, { color: STYLE1_MUTED, fontFamily: 'LeeSeoyun', fontWeight: 'normal' }]}>reading</Text>
             </View>
           </View>
         </View>

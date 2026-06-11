@@ -230,12 +230,17 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
   const cardCaptureRef = React.useRef(null);
   const slideAnim = React.useRef(new Animated.Value(0)).current;
   const [tabGroupWidth, setTabGroupWidth] = React.useState(0);
-  const [resultToast, setResultToast] = React.useState({ visible: false, message: '' });
+  const [resultToast, setResultToast] = React.useState({ visible: false, message: '', requestId: 0 });
+  const resultToastTimerRef = React.useRef(null);
   const [customCardBg, setCustomCardBg] = React.useState(null);
   const [showBookInfo, setShowBookInfo] = React.useState(true);
 
   const showResultToast = (message) => {
-    setResultToast({ visible: true, message });
+    clearTimeout(resultToastTimerRef.current);
+    setResultToast(prev => ({ visible: true, message, requestId: prev.requestId + 1 }));
+    resultToastTimerRef.current = setTimeout(() => {
+      setResultToast(prev => ({ ...prev, visible: false }));
+    }, 2000);
   };
 
   const handlePickFromAlbum = () => {
@@ -352,6 +357,8 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
       // 세션 시작 — 현재 시각 기록
       sessionStartTsRef.current = Date.now();
       timerRef.current = setInterval(() => setElapsed(getCurrentElapsed()), 1000);
+      // 재생 시작 시 pending state 제거 (복원 후 재개 또는 새 세션)
+      AsyncStorage.removeItem('timerPendingState').catch(() => {});
       // AsyncStorage에 상태 저장 (앱 종료 후 복원용)
       AsyncStorage.setItem('timerState', JSON.stringify({
         sessionStartTs: sessionStartTsRef.current,
@@ -387,18 +394,47 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
 
   // 앱 재시작 시 타이머 상태 복원
   React.useEffect(() => {
-    AsyncStorage.getItem('timerState').then(stored => {
-      if (!stored) return;
-      const { sessionStartTs, elapsedBase, selectedBook: savedBook, readingStartPage: savedStartPage, readingStartTime: savedStartTime } = JSON.parse(stored);
-      const restored = elapsedBase + Math.floor((Date.now() - sessionStartTs) / 1000);
-      elapsedBaseRef.current = restored;
-      sessionStartTsRef.current = null;
-      setElapsed(restored);
-      if (savedBook) setSelectedBook(savedBook);
-      if (savedStartPage !== undefined) setReadingStartPage(savedStartPage);
-      if (savedStartTime) setReadingStartTime(new Date(savedStartTime));
-      setIsPlaying(true);
-    }).catch(() => {});
+    const restore = async () => {
+      try {
+        // 타이머 정지 후 페이지 미입력 상태로 앱을 종료한 경우 → 일시정지 상태로 복원
+        const pending = await AsyncStorage.getItem('timerPendingState');
+        if (pending) {
+          const {
+            selectedBook: savedBook,
+            resultElapsed: savedElapsed,
+            readingStartPage: savedStartPage,
+            readingStartTime: savedStartTime,
+            readingEndTime: savedEndTime,
+            sessionReadingDays: savedReadingDays,
+            selectedBookTotalPages: savedTotalPages,
+          } = JSON.parse(pending);
+          elapsedBaseRef.current = savedElapsed ?? 0;
+          setElapsed(savedElapsed ?? 0);
+          setResultElapsed(savedElapsed ?? 0);
+          if (savedBook) setSelectedBook(savedBook);
+          if (savedStartPage !== undefined) setReadingStartPage(savedStartPage);
+          if (savedStartTime) setReadingStartTime(new Date(savedStartTime));
+          if (savedEndTime) setReadingEndTime(new Date(savedEndTime));
+          if (savedReadingDays !== undefined) setSessionReadingDays(savedReadingDays);
+          if (savedTotalPages !== undefined) setSelectedBookTotalPages(savedTotalPages);
+          // isPlaying은 false 유지 → elapsed > 0이므로 타이머 일시정지 UI 표시
+          return;
+        }
+        // 진행 중이던 타이머 상태 복원
+        const stored = await AsyncStorage.getItem('timerState');
+        if (!stored) return;
+        const { sessionStartTs, elapsedBase, selectedBook: savedBook, readingStartPage: savedStartPage, readingStartTime: savedStartTime } = JSON.parse(stored);
+        const restored = elapsedBase + Math.floor((Date.now() - sessionStartTs) / 1000);
+        elapsedBaseRef.current = restored;
+        sessionStartTsRef.current = null;
+        setElapsed(restored);
+        if (savedBook) setSelectedBook(savedBook);
+        if (savedStartPage !== undefined) setReadingStartPage(savedStartPage);
+        if (savedStartTime) setReadingStartTime(new Date(savedStartTime));
+        setIsPlaying(true);
+      } catch {}
+    };
+    restore();
   }, []);
 
   const formatTime = (s) => {
@@ -530,6 +566,16 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
       } else {
         setEndPageInput('');
         setIsEndPageModalVisible(true);
+        // 앱 종료 시 복원을 위해 현재 결과 상태 저장
+        AsyncStorage.setItem('timerPendingState', JSON.stringify({
+          selectedBook,
+          resultElapsed,
+          readingStartPage,
+          readingStartTime: readingStartTime?.toISOString() ?? null,
+          readingEndTime: readingEndTime?.toISOString() ?? null,
+          sessionReadingDays,
+          selectedBookTotalPages,
+        })).catch(() => {});
       }
     }
   }, [isResultModalVisible]);
@@ -681,7 +727,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
                 key="done"
                 variant="text"
                 size="large"
-                onPress={() => { setIsResultModalVisible(false); setCustomCardBg(null); isManualResultRef.current = false; }}
+                onPress={() => { setIsResultModalVisible(false); setCustomCardBg(null); isManualResultRef.current = false; AsyncStorage.removeItem('timerPendingState').catch(() => {}); }}
               >
                 완료
               </Button>
@@ -771,14 +817,15 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
             {/* 스타일 선택 탭 */}
             <View style={styles.resultTabSection}>
               {[
-                { key: 'light',  label: 'Light'  },
-                { key: 'dark',   label: 'Dark'   },
-                { key: 'style1', label: 'Style1' },
-                { key: 'style2', label: 'Style2' },
-              ].map(({ key, label }) => (
+                { key: 'light',  label: 'Light',  thumbnail: require('../assets/thmb_light.png')  },
+                { key: 'dark',   label: 'Dark',   thumbnail: require('../assets/thmb_dark.png')   },
+                { key: 'style1', label: 'Style1', thumbnail: require('../assets/thmb_style1.png') },
+                { key: 'style2', label: 'Style2', thumbnail: require('../assets/thmb_style2.png') },
+              ].map(({ key, label, thumbnail }) => (
                 <ResultStyleTab
                   key={key}
                   label={label}
+                  thumbnail={thumbnail}
                   selected={selectedVariant === key}
                   onPress={() => setSelectedVariant(key)}
                 />
@@ -787,7 +834,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
 
             {/* 하단 버튼 영역 */}
             <View style={[styles.resultBottomButtons, { paddingBottom: insets.bottom + Spacing.md }]}>
-              <Text style={styles.resultSaveHint}>독서 결과는 자동으로 도토리룸에 저장돼요.</Text>
+              <Text style={styles.resultSaveHint}>독서 결과는 자동으로 도토리에 저장돼요.</Text>
               <View style={styles.resultButtonRow}>
                 <Button variant="outline" size="xxlarge" style={styles.resultButtonHalf} onPress={handleWriteReview}>
                   독후감 작성
@@ -800,7 +847,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
           <Toast
             visible={resultToast.visible}
             message={resultToast.message}
-            onHide={() => setResultToast(prev => ({ ...prev, visible: false }))}
+            requestId={resultToast.requestId}
           />
           <Modal visible={isCardMenuVisible} transparent animationType="none" onRequestClose={closeCardMenu}>
             <Pressable style={styles.cardMenuOverlay} onPress={closeCardMenu}>
@@ -832,6 +879,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
             onPrimaryPress={() => {
               const endPage = parseInt(endPageInput) || 0;
               setIsEndPageModalVisible(false);
+              AsyncStorage.removeItem('timerPendingState').catch(() => {});
               if (onUpdateReading && selectedBook) {
                 onUpdateReading(selectedBook, 'updatePage', {
                   currentPage: endPage,
@@ -849,6 +897,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
                   startPage: readingStartPage,
                   endPage,
                   totalPages: selectedBookTotalPages,
+                  source: 'timer',
                 });
               }
             }}
@@ -858,7 +907,6 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
               (selectedBookTotalPages > 0 && parseInt(endPageInput) > selectedBookTotalPages) ||
               parseInt(endPageInput) <= readingStartPage
             }
-            onClose={() => setIsEndPageModalVisible(false)}
           >
             <TextField
               ref={endPageInputRef}
@@ -934,7 +982,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
                         ]}
                       >
                         <BestBook
-                          rank={4}
+                          rank={null}
                           title={book.title}
                           author={book.author}
                           coverImage={book.coverImage}
@@ -1236,17 +1284,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   resultDataArea: {
-    height: '70%',
+    flex: 1,
     alignItems: 'center',
     overflow: 'hidden',
   },
   resultTabSection: {
-    flex: 1,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     gap: Spacing.md,
     paddingHorizontal: Spacing.xl,
+    paddingVertical: 20,
   },
   bookInfoToggleRow: {
     position: 'absolute',

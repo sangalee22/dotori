@@ -44,6 +44,13 @@ export async function deleteAllUserData(userId) {
   ]);
 }
 
+export async function getUserByEmail(email) {
+  if (!email) return null;
+  const q = query(collection(db, 'users'), where('email', '==', email), limit(1));
+  const snap = await getDocs(q);
+  return snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() };
+}
+
 export async function checkNickname(nickname) {
   const q = query(collection(db, 'users'), where('nickname', '==', nickname), limit(1));
   const snap = await getDocs(q);
@@ -125,6 +132,17 @@ export async function addReview(data) {
     likes: [],
     createdAt: serverTimestamp(),
   });
+}
+
+export async function updateReview(reviewId, data) {
+  await updateDoc(doc(db, 'reviews', reviewId), {
+    ...data,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function deleteReview(reviewId) {
+  await deleteDoc(doc(db, 'reviews', reviewId));
 }
 
 export async function toggleReviewLike(reviewId, userId) {

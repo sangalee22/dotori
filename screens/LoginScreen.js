@@ -8,7 +8,9 @@ import SimbolFillIcon from '../components/SimbolFillIcon';
 import LogoTextIcon from '../components/LogoTextIcon';
 import KakaoLoginButton from '../components/KakaoLoginButton';
 import GoogleLoginButton from '../components/GoogleLoginButton';
-import { loginWithKakao, loginWithGoogle, getGoogleRedirectResult } from '../services/auth';
+import AppleLoginButton from '../components/AppleLoginButton';
+import { loginWithKakao, loginWithGoogle, loginWithApple, getGoogleRedirectResult } from '../services/auth';
+import ModalPopup from '../components/ModalPopup';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 import { makeRedirectUri } from 'expo-auth-session';
@@ -22,6 +24,15 @@ const GOOGLE_ANDROID_CLIENT_ID = '642592573898-elm8i8sjah4npkim86jcgr03vuarp41k.
 
 export default function LoginScreen({ onLogin, onSignUp }) {
   const [isLoading, setIsLoading] = useState(false);
+  const [conflictInfo, setConflictInfo] = useState(null);
+
+  const PROVIDER_NAMES = { kakao: '카카오', google: '구글', apple: 'Apple' };
+
+  const handleConflictConfirm = () => {
+    const pending = conflictInfo.pendingUserInfo;
+    setConflictInfo(null);
+    onSignUp?.(pending);
+  };
 
   // 네이티브 전용 Google OAuth 훅 (웹은 signInWithRedirect 사용)
   const [googleRequest, googleResponse, googlePromptAsync] = Google.useAuthRequest({
@@ -59,7 +70,9 @@ export default function LoginScreen({ onLogin, onSignUp }) {
   const handleGoogleLoginNative = async (idToken) => {
     try {
       const result = await loginWithGoogle(idToken);
-      if (result.isNewUser) {
+      if (result.isNewUser && result.existingProvider) {
+        setConflictInfo({ existingProvider: result.existingProvider, pendingUserInfo: result.userInfo });
+      } else if (result.isNewUser) {
         onSignUp?.(result.userInfo);
       } else {
         onLogin?.(result.userInfo);
@@ -81,7 +94,9 @@ export default function LoginScreen({ onLogin, onSignUp }) {
 
       const result = await loginWithKakao();
 
-      if (result.isNewUser) {
+      if (result.isNewUser && result.existingProvider) {
+        setConflictInfo({ existingProvider: result.existingProvider, pendingUserInfo: result.userInfo });
+      } else if (result.isNewUser) {
         // New user - go to sign up screen
         console.log('New user detected, navigating to sign up');
         if (onSignUp) {
@@ -102,6 +117,28 @@ export default function LoginScreen({ onLogin, onSignUp }) {
     }
   };
 
+  const handleAppleLogin = async () => {
+    if (isLoading) return;
+    try {
+      setIsLoading(true);
+      const result = await loginWithApple();
+      if (result.isNewUser && result.existingProvider) {
+        setConflictInfo({ existingProvider: result.existingProvider, pendingUserInfo: result.userInfo });
+      } else if (result.isNewUser) {
+        onSignUp?.(result.userInfo);
+      } else {
+        onLogin?.(result.userInfo);
+      }
+    } catch (error) {
+      if (error.code !== 'ERR_REQUEST_CANCELED') {
+        console.error('Apple login error:', error);
+        Alert.alert('로그인 실패', error.message || 'Apple 로그인에 실패했습니다.');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleGoogleLogin = async () => {
     if (isLoading) return;
     setIsLoading(true);
@@ -109,7 +146,9 @@ export default function LoginScreen({ onLogin, onSignUp }) {
     if (Platform.OS === 'web') {
       try {
         const result = await loginWithGoogle();
-        if (result.isNewUser) {
+        if (result.isNewUser && result.existingProvider) {
+          setConflictInfo({ existingProvider: result.existingProvider, pendingUserInfo: result.userInfo });
+        } else if (result.isNewUser) {
           onSignUp?.(result.userInfo);
         } else {
           onLogin?.(result.userInfo);
@@ -161,6 +200,12 @@ export default function LoginScreen({ onLogin, onSignUp }) {
             <TouchableOpacity onPress={handleGoogleLogin} activeOpacity={0.8} disabled={isLoading}>
               <GoogleLoginButton />
             </TouchableOpacity>
+
+            {Platform.OS === 'ios' && (
+              <TouchableOpacity onPress={handleAppleLogin} activeOpacity={0.8} disabled={isLoading}>
+                <AppleLoginButton />
+              </TouchableOpacity>
+            )}
           </View>
 
           {__DEV__ && (
@@ -174,6 +219,17 @@ export default function LoginScreen({ onLogin, onSignUp }) {
           )}
         </View>
       </SafeAreaView>
+
+      <ModalPopup
+        visible={!!conflictInfo}
+        title="이미 가입되어있어요"
+        description={`${PROVIDER_NAMES[conflictInfo?.existingProvider]}으로 가입되어있어요.\n이 SNS로 계속 가입할까요?`}
+        primaryButtonText="가입"
+        secondaryButtonText="취소"
+        onPrimaryPress={handleConflictConfirm}
+        onSecondaryPress={() => setConflictInfo(null)}
+        onClose={() => setConflictInfo(null)}
+      />
     </View>
   );
 }

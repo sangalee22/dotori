@@ -6,10 +6,12 @@ import DefaultHeader from './DefaultHeader';
 import CloseIcon from './CloseIcon';
 import TextField from './TextField';
 import Button from './Button';
+import ModalPopup from './ModalPopup';
 
-export default function RecordEditModal({ visible, onClose, record, book, onSave }) {
+export default function RecordEditModal({ visible, onClose, record, book, onSave, onComplete, isLatestRecord = true }) {
   const insets = useSafeAreaInsets();
 
+  const [completeConfirmVisible, setCompleteConfirmVisible] = React.useState(false);
   const [hours, setHours] = React.useState('0');
   const [minutes, setMinutes] = React.useState('0');
   const [seconds, setSeconds] = React.useState('0');
@@ -124,6 +126,22 @@ export default function RecordEditModal({ visible, onClose, record, book, onSave
 
         <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.md }]}>
           <Button
+            variant="text"
+            size="medium"
+            style={styles.completeButton}
+            textStyle={{ color: Colors.gray800, textDecorationLine: 'underline' }}
+            onPress={() => {
+              if (isLatestRecord) {
+                onSave?.({ ...record, endPage: book?.totalPages ?? record?.endPage ?? 0 });
+                onComplete?.();
+              } else {
+                setCompleteConfirmVisible(true);
+              }
+            }}
+          >
+            완독했어요 🎉
+          </Button>
+          <Button
             variant="primary"
             size="xxlarge"
             style={styles.saveButton}
@@ -134,6 +152,20 @@ export default function RecordEditModal({ visible, onClose, record, book, onSave
           </Button>
         </View>
       </View>
+      <ModalPopup
+        visible={completeConfirmVisible}
+        title="완독하시겠어요?"
+        description="이 기록보다 더 최근 기록이 있어요."
+        primaryButtonText="완독"
+        secondaryButtonText="취소"
+        onPrimaryPress={() => {
+          setCompleteConfirmVisible(false);
+          onSave?.({ ...record, endPage: book?.totalPages ?? record?.endPage ?? 0 });
+          onComplete?.();
+        }}
+        onSecondaryPress={() => setCompleteConfirmVisible(false)}
+        onClose={() => setCompleteConfirmVisible(false)}
+      />
     </Modal>
   );
 }
@@ -173,6 +205,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingTop: Spacing.md,
     backgroundColor: Colors.white,
+    alignItems: 'center',
+    gap: Spacing.md,
+  },
+  completeButton: {
+    alignSelf: 'center',
   },
   saveButton: {
     width: '100%',

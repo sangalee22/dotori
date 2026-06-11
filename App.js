@@ -33,7 +33,11 @@ import ModalPopup from './components/ModalPopup';
 import SettingIcon from './components/SettingIcon';
 import IconButton from './components/IconButton';
 import { registerUser, logout as firebaseLogout, withdrawUser, onAuthChange } from './services/auth';
-import { getUser, getUserBooks, getReadingRecords, getReviews, updateReviewsBookInfo, getBookReaderCount } from './services/firestore';
+import useAppOpenAd from './hooks/useAppOpenAd';
+import { getUser, getUserBooks, getReadingRecords, getReviews, addReview, updateReview, deleteReview, setUserBook, removeUserBook, updateReviewsBookInfo, getBookReaderCount } from './services/firestore';
+import { storage, auth } from './services/firebase';
+import { ref, uploadBytes, getDownloadURL, deleteObject, listAll } from 'firebase/storage';
+import { signInAnonymously } from 'firebase/auth';
 import { Colors, Typography, FontWeights } from './styles';
 import { Spacing, BorderRadius } from './styles/spacing';
 import { fetchBestsellers, fetchNewBooks, fetchBookDetail, searchBooks, cleanAuthorName, CATEGORY_LIST } from './services/aladinApi';
@@ -64,6 +68,7 @@ export default function App() {
   });
 
   const { width: windowWidth } = useWindowDimensions();
+  useAppOpenAd(isLoggedIn);
   const [showSplash, setShowSplash] = React.useState(true); // Show splash screen on app start
   const [isLoggedIn, setIsLoggedIn] = React.useState(false); // Track login state
   const [isInSignUpFlow, setIsInSignUpFlow] = React.useState(false); // Track if user is in sign-up process
@@ -146,6 +151,18 @@ export default function App() {
   const toggleFavorite = (book) => {
     setWantToReadBooks(prev => {
       const exists = prev.some(b => b.isbn === book.isbn);
+      if (currentUser?.id) {
+        if (exists) {
+          removeUserBook(currentUser.id, String(book.isbn)).catch(() => {});
+        } else {
+          setUserBook(currentUser.id, String(book.isbn), {
+            title: book.title,
+            author: book.author,
+            coverImage: book.coverImage || null,
+            status: 'want',
+          }).catch(() => {});
+        }
+      }
       return exists ? prev.filter(b => b.isbn !== book.isbn) : [...prev, book];
     });
   };
@@ -354,18 +371,19 @@ export default function App() {
             setShowSplash(false);
 
             // Firestore에서 데이터 로드
-            const [fbReadingBooks, fbWantBooks, fbRecords, fbReviews] = await Promise.all([
+            const [fbReadingBooks, fbCompletedBooks, fbWantBooks, fbRecords, fbReviews] = await Promise.all([
               getUserBooks(firebaseUser.uid, 'reading'),
+              getUserBooks(firebaseUser.uid, 'completed'),
               getUserBooks(firebaseUser.uid, 'want'),
               getReadingRecords(firebaseUser.uid),
               getReviews(),
             ]);
 
-            // Firestore 데이터 병합: 로컬(AsyncStorage) 데이터의 coverImage 등 필드 보존
-            if (fbReadingBooks.length > 0) {
+            const allFbReadingBooks = [...fbReadingBooks, ...fbCompletedBooks];
+            if (allFbReadingBooks.length > 0) {
               setReadingBooks(prev => {
                 const localMap = new Map(prev.map(b => [String(b.isbn), b]));
-                return fbReadingBooks.map(fb => ({ ...localMap.get(String(fb.isbn)), ...fb }));
+                return allFbReadingBooks.map(fb => ({ ...localMap.get(String(fb.isbn)), ...fb }));
               });
             }
             if (fbWantBooks.length > 0) {
@@ -422,6 +440,28 @@ export default function App() {
         r.isbn === updated.isbn && r.createdAt === updated.createdAt ? updated : r
       );
       AsyncStorage.setItem('readingRecords', JSON.stringify(next)).catch(() => {});
+
+      // 해당 책의 가장 최신 기록(date 기준, 동일하면 createdAt 기준)의 endPage를 currentPage에 반영
+      const bookRecords = next.filter(r => String(r.isbn) === String(updated.isbn));
+      const latestRecord = [...bookRecords].sort((a, b) => {
+        const da = a.date ?? a.createdAt ?? '';
+        const db = b.date ?? b.createdAt ?? '';
+        if (da !== db) return db.localeCompare(da);
+        return (b.createdAt ?? '').localeCompare(a.createdAt ?? '');
+      })[0];
+
+      if (latestRecord) {
+        setReadingBooks(prevBooks => {
+          const nextBooks = prevBooks.map(book =>
+            String(book.isbn) === String(updated.isbn)
+              ? { ...book, currentPage: latestRecord.endPage ?? book.currentPage }
+              : book
+          );
+          AsyncStorage.setItem('readingBooks', JSON.stringify(nextBooks)).catch(() => {});
+          return nextBooks;
+        });
+      }
+
       return next;
     });
   }, []);
@@ -442,6 +482,8 @@ export default function App() {
 
   // Add or update a reading book
   const updateReadingBook = (book, updateType, data) => {
+    let syncBook = null;
+
     setReadingBooks((prevBooks) => {
       const existingIndex = prevBooks.findIndex(b => String(b.isbn) === String(book.isbn));
       const now = new Date().toISOString();
@@ -464,7 +506,6 @@ export default function App() {
         readingDates,
       };
 
-      // If this is a new book, set startedAt automatically
       if (isNewBook) {
         updatedBook.startedAt = now;
       }
@@ -488,61 +529,131 @@ export default function App() {
         updatedBook.completedAt = now;
       }
 
-      // 같은 isbn 중복 제거 후 업데이트
+      syncBook = updatedBook;
+
       const filtered = prevBooks.filter((b, i) =>
         String(b.isbn) !== String(book.isbn) || i === existingIndex
       );
       if (existingIndex >= 0) {
-        const newBooks = filtered.map(b =>
+        return filtered.map(b =>
           String(b.isbn) === String(book.isbn) ? updatedBook : b
         );
-        return newBooks;
       } else {
         return [updatedBook, ...filtered];
       }
     });
+
+    if (currentUser?.id && syncBook) {
+      const status = syncBook.isCompleted ? 'completed' : 'reading';
+      setUserBook(currentUser.id, String(book.isbn), {
+        title: syncBook.title || book.title,
+        author: syncBook.author || book.author,
+        coverImage: syncBook.coverImage || book.coverImage || null,
+        status,
+        currentPage: syncBook.currentPage ?? 0,
+        totalPages: syncBook.totalPages ?? 0,
+        isCompleted: syncBook.isCompleted ?? false,
+        startedAt: syncBook.startedAt ?? null,
+        completedAt: syncBook.completedAt ?? null,
+        lastActivityAt: syncBook.lastActivityAt ?? null,
+      }).catch(() => {});
+    }
+  };
+
+  const uploadReviewImages = async (images, userId, reviewId) => {
+    if (!images?.length) return null;
+    if (!auth.currentUser) await signInAnonymously(auth).catch(() => {});
+    return await Promise.all(
+      images.map(async (uri, index) => {
+        if (uri.startsWith('http')) return uri;
+        const response = await fetch(uri);
+        const blob = await response.blob();
+        const storageRef = ref(storage, `reviewImages/${userId}/${reviewId}/${index}`);
+        await uploadBytes(storageRef, blob);
+        return await getDownloadURL(storageRef);
+      })
+    );
   };
 
   // Add review handler
-  const handleAddReview = (newReview) => {
-    setReviews((prevReviews) => [newReview, ...prevReviews]);
+  const handleAddReview = async (newReview) => {
+    setReviews((prevReviews) => [normalizeReview(newReview), ...prevReviews]);
+
+    try {
+      const cloudImages = await uploadReviewImages(newReview.images, newReview.userId, newReview.id);
+
+      const firestoreData = {
+        userId: newReview.userId,
+        userNickname: newReview.user?.name || '익명',
+        bookIsbn: newReview.bookIsbn,
+        bookTitle: newReview.book?.title || '',
+        bookAuthor: newReview.book?.author || '',
+        bookCover: newReview.book?.cover || null,
+        type: newReview.type,
+        content: newReview.content,
+        page: newReview.page || null,
+        images: cloudImages || null,
+        isSpoiler: newReview.isSpoiler || false,
+        isCompleted: newReview.isCompleted || false,
+      };
+
+      const docRef = await addReview(firestoreData);
+
+      setReviews((prevReviews) =>
+        prevReviews.map(r =>
+          r.id === newReview.id
+            ? { ...r, id: docRef.id, ...(cloudImages && { images: cloudImages }) }
+            : r
+        )
+      );
+    } catch (e) {
+      console.error('리뷰 저장 실패:', e?.code, e?.message);
+    }
   };
 
   // Delete review handler
   const handleDeleteReview = async (reviewId) => {
-    // Remove from state
-    setReviews((prevReviews) => prevReviews.filter(review => review.id !== reviewId));
-
-    // Remove from AsyncStorage
+    const review = reviews.find(r => r.id === reviewId);
+    setReviews((prevReviews) => prevReviews.filter(r => r.id !== reviewId));
     try {
-      const updatedReviews = reviews.filter(review => review.id !== reviewId);
-      await AsyncStorage.setItem('reviews', JSON.stringify(updatedReviews));
-    } catch (error) {
-      console.error('Error deleting review from AsyncStorage:', error);
+      await deleteReview(reviewId);
+    } catch (e) {
+      console.error('리뷰 삭제 실패:', e?.code, e?.message);
+    }
+    if (review?.images?.length > 0 && currentUser?.id) {
+      try {
+        const folder = ref(storage, `reviewImages/${currentUser.id}/${reviewId}`);
+        const { items } = await listAll(folder);
+        await Promise.all(items.map(item => deleteObject(item).catch(() => {})));
+      } catch {}
     }
   };
 
   // Edit review handler
   const handleEditReview = async (reviewId, updatedData) => {
-    // Update in state
     setReviews((prevReviews) =>
       prevReviews.map(review =>
-        review.id === reviewId
-          ? { ...review, ...updatedData }
-          : review
+        review.id === reviewId ? { ...review, ...updatedData } : review
       )
     );
 
-    // Update in AsyncStorage
     try {
-      const updatedReviews = reviews.map(review =>
-        review.id === reviewId
-          ? { ...review, ...updatedData }
-          : review
-      );
-      await AsyncStorage.setItem('reviews', JSON.stringify(updatedReviews));
-    } catch (error) {
-      console.error('Error updating review in AsyncStorage:', error);
+      const cloudImages = await uploadReviewImages(updatedData.images, currentUser?.id, reviewId);
+      const firestoreUpdate = {
+        type: updatedData.type,
+        content: updatedData.content,
+        page: updatedData.page ?? null,
+        images: cloudImages ?? null,
+        isSpoiler: updatedData.isSpoiler ?? false,
+      };
+      await updateReview(reviewId, firestoreUpdate);
+      if (cloudImages) {
+        setReviews((prevReviews) =>
+          prevReviews.map(r => r.id === reviewId ? { ...r, images: cloudImages } : r)
+        );
+      }
+    } catch (e) {
+      console.error('리뷰 수정 실패:', e?.code, e?.message);
     }
   };
 
@@ -860,9 +971,13 @@ export default function App() {
             setReadingBooks([]);
             setWantToReadBooks([]);
             setReadingRecords([]);
-            const [userData, fbReviews] = await Promise.all([
+            const [userData, fbReviews, fbReadingBooks, fbCompletedBooks, fbWantBooks, fbRecords] = await Promise.all([
               getUser(userInfo.id),
               getReviews(),
+              getUserBooks(userInfo.id, 'reading').catch(() => []),
+              getUserBooks(userInfo.id, 'completed').catch(() => []),
+              getUserBooks(userInfo.id, 'want').catch(() => []),
+              getReadingRecords(userInfo.id).catch(() => []),
             ]);
             const fullUser = userData
               ? { id: userInfo.id, ...userData, profileImage: userData.profileImage || userInfo.profileImage || null }
@@ -870,6 +985,10 @@ export default function App() {
             setCurrentUser(fullUser);
             await AsyncStorage.setItem('currentUser', JSON.stringify(fullUser));
             if (fbReviews.length > 0) setReviews(fbReviews.map(normalizeReview));
+            const allReadingBooks = [...fbReadingBooks, ...fbCompletedBooks];
+            if (allReadingBooks.length > 0) setReadingBooks(allReadingBooks);
+            if (fbWantBooks.length > 0) setWantToReadBooks(fbWantBooks);
+            if (fbRecords.length > 0) setReadingRecords(fbRecords);
             setIsLoggedIn(true);
           }}
           onSignUp={(userInfo) => {
@@ -1296,6 +1415,7 @@ export default function App() {
               }}
               onDeleteReadingRecord={handleDeleteReadingRecord}
               onEditReadingRecord={handleEditReadingRecord}
+              onCompleteBook={(book) => updateReadingBook(book, 'complete', { currentPage: book?.totalPages, totalPages: book?.totalPages, isCompleted: true })}
               onAddRecord={(dateStr) => {
                 const formatD = (s) => {
                   if (!s) return '독서 기록';
@@ -1407,7 +1527,7 @@ export default function App() {
       {/* BookDetail overlay - show when in bookDetail or createRoom view */}
       {(currentView === 'bookDetail' || currentView === 'createRoom') && selectedBook && (() => {
         // Find if this book is in reading state
-        const readingBookData = readingBooks.find(book => book.isbn === selectedBook.isbn);
+        const readingBookData = readingBooks.find(book => String(book.isbn) === String(selectedBook.isbn));
 
         return (
           <BookDetail
@@ -1683,8 +1803,10 @@ const styles = StyleSheet.create({
   nowReading: {
     flexDirection: 'row',
     backgroundColor: Colors.white,
-    borderRadius: BorderRadius.sm,
+    borderRadius: BorderRadius.huge,
     gap: Spacing.md,
+    padding: Spacing.xl,
+    backgroundColor: Colors.gray50,
   },
   nowReadingNull: {
     alignItems: 'flex-start',
@@ -1695,8 +1817,8 @@ const styles = StyleSheet.create({
     height: 110, // Fixed height
   },
   bookCoverSmall: {
-    width: 108,
-    height: 158,
+    width: 103,
+    height: 150,
     borderRadius: BorderRadius.sm,
     borderWidth: 1,
     borderColor: Colors.gray100,
@@ -1723,7 +1845,6 @@ const styles = StyleSheet.create({
   },
   nowReadingInfo: {
     flex: 1,
-    paddingVertical: Spacing.xs,
   },
   bookTitle: {
     ...Typography.headline2Bold,
@@ -1731,7 +1852,7 @@ const styles = StyleSheet.create({
   },
   bookAuthor: {
     ...Typography.subtitle1Regular,
-    color: Colors.gray600,
+    color: Colors.gray800,
   },
   nowReadingBottom: {
     gap: Spacing.md,

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
 import Toast from '../components/Toast';
 
 const ToastContext = createContext();
@@ -10,21 +10,25 @@ export function ToastProvider({ children }) {
     duration: 2000,
     requestId: 0,
   });
+  const timerRef = useRef(null);
+
+  const hideToast = useCallback(() => {
+    clearTimeout(timerRef.current);
+    setToast(prev => ({ ...prev, visible: false }));
+  }, []);
 
   const showToast = useCallback((message, duration = 2000) => {
+    clearTimeout(timerRef.current);
     setToast(prev => ({
       visible: true,
       message,
       duration,
       requestId: prev.requestId + 1,
     }));
-  }, []);
-
-  const hideToast = useCallback(() => {
-    setToast((prev) => ({
-      ...prev,
-      visible: false,
-    }));
+    // 애니메이션 콜백 누락 방지: duration + fade-out(300ms) 후 무조건 숨김
+    timerRef.current = setTimeout(() => {
+      setToast(prev => ({ ...prev, visible: false }));
+    }, duration + 300);
   }, []);
 
   return (
@@ -33,8 +37,6 @@ export function ToastProvider({ children }) {
       <Toast
         visible={toast.visible}
         message={toast.message}
-        duration={toast.duration}
-        onHide={hideToast}
         requestId={toast.requestId}
       />
     </ToastContext.Provider>

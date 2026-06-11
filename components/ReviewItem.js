@@ -42,14 +42,14 @@ export default function ReviewItem({
       {/* Review Content */}
       <View style={styles.reviewContent}>
         {/* Page Number or Completed Badge */}
-        {isCompleted ? (
-          <View style={styles.completedBadge}>
-            <Text style={styles.completedText}>완독</Text>
-          </View>
-        ) : page && page > 0 ? (
+        {page && page > 0 ? (
           <View style={styles.pageNumber}>
             <Text style={styles.pageNumberText}>{page}</Text>
             <Text style={styles.pageNumberText}>p</Text>
+          </View>
+        ) : isCompleted ? (
+          <View style={styles.completedBadge}>
+            <Text style={styles.completedText}>완독</Text>
           </View>
         ) : null}
 

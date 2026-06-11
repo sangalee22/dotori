@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Image, StyleSheet } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { BorderRadius, Colors } from '../styles';
@@ -17,10 +17,18 @@ export default function UserProfile({
   const sizeStyle = sizeStyles[size] || sizeStyles[32];
   const iconScale = size / 24; // Scale SVG based on size
 
+  const [imgError, setImgError] = useState(false);
+  useEffect(() => { setImgError(false); }, [imageUri]);
+  const showImage = imageUri && !imgError;
+
   return (
     <View style={[styles.container, sizeStyle.container, style]}>
-      {imageUri ? (
-        <Image source={{ uri: imageUri }} style={styles.image} />
+      {showImage ? (
+        <Image
+          source={{ uri: imageUri }}
+          style={styles.image}
+          onError={() => setImgError(true)}
+        />
       ) : (
         <View style={styles.placeholder}>
           <Svg

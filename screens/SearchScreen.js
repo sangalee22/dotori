@@ -162,7 +162,7 @@ export default function SearchScreen({
                     ]}
                   >
                     <BestBook
-                      rank={4}
+                      rank={null}
                       title={book.title}
                       author={book.author}
                       coverImage={book.coverImage}
@@ -224,7 +224,7 @@ export default function SearchScreen({
                 {recentBooks.map((book, index) => (
                   <BestBook
                     key={index}
-                    rank={4}
+                    rank={null}
                     title={book.title}
                     author={book.author}
                     coverImage={book.coverImage}

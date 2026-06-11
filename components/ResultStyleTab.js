@@ -1,17 +1,15 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import { Colors, Typography, Spacing, BorderRadius } from '../styles';
 
-/**
- * ResultStyleTab
- * @param {string}   label    - 표시할 라벨 ('Light', 'Dark', 'Style1' …)
- * @param {boolean}  selected - 선택 여부
- * @param {function} onPress  - 탭 선택 콜백
- */
-export default function ResultStyleTab({ label, selected = false, onPress }) {
+export default function ResultStyleTab({ label, selected = false, onPress, thumbnail }) {
   return (
     <TouchableOpacity style={styles.wrapper} onPress={onPress} activeOpacity={0.7}>
-      <View style={[styles.box, selected && styles.boxSelected]} />
+      <View style={[styles.box, selected && styles.boxSelected]}>
+        {thumbnail && (
+          <Image source={thumbnail} style={styles.thumbnail} resizeMode="cover" />
+        )}
+      </View>
       <Text style={[styles.label, selected && styles.labelSelected]}>{label}</Text>
     </TouchableOpacity>
   );
@@ -25,13 +23,23 @@ const styles = StyleSheet.create({
   box: {
     width: 50,
     height: 50,
-    borderRadius: BorderRadius.sm,
+    borderRadius: BorderRadius.lg,
     backgroundColor: Colors.gray100,
     borderWidth: 2,
     borderColor: 'transparent',
+    overflow: 'hidden',
   },
   boxSelected: {
     borderColor: Colors.primary500,
+  },
+  thumbnail: {
+    position: 'absolute',                                     
+    top: -2,                                                  
+    left: -2,                                                 
+    right: -2,                                                
+    bottom: -2, 
+    width: 50,
+    height: 50,
   },
   label: {
     ...Typography.body2Regular,

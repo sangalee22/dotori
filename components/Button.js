@@ -110,19 +110,19 @@ const styles = StyleSheet.create({
 
   // Size variants
   sizeSmall: {
-    height: 28,
+    height: 32,
     paddingHorizontal: Spacing.md,
     borderRadius: BorderRadius.md,
   },
   sizeMedium: {
-    height: 32,
+    height: 36,
     paddingHorizontal: Spacing.md,
     borderRadius: 14,
   },
   sizeLarge: {
     height: 40,
     paddingHorizontal: Spacing.lg,
-    borderRadius: 15,
+    borderRadius: BorderRadius.lg,
   },
   sizeXLarge: {
     height: 48,
@@ -184,10 +184,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   textSmall: {
-    ...Typography.body3Medium,
+    ...Typography.body2Regular,
   },
   textMedium: {
-    ...Typography.body2Medium,
+    ...Typography.body2Regular,
   },
   textLarge: {
     ...Typography.body1Medium,

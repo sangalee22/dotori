@@ -12,7 +12,7 @@ import CloseIcon from './CloseIcon';
 import RecordEditModal from './RecordEditModal';
 import { pickImageFromLibrary, takePhoto as takePhotoUtil } from '../utils/pickImage';
 
-export default function RecordDetailModal({ visible, onClose, record, book, readingDays = 1, onDelete, onEdit, hideTime = false }) {
+export default function RecordDetailModal({ visible, onClose, record, book, readingDays = 1, onDelete, onEdit, onComplete, isLatestRecord = true, hideTime = false }) {
   const insets = useSafeAreaInsets();
   const [variant, setVariant] = React.useState('light');
   const [showBookInfo, setShowBookInfo] = React.useState(true);
@@ -73,7 +73,7 @@ export default function RecordDetailModal({ visible, onClose, record, book, read
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <View style={styles.container}>
         <DefaultHeader
-          title="독서 결과"
+          title="독서 기록"
           rightButton={<CloseIcon />}
           onMenu={onClose}
           showBlur={false}
@@ -133,14 +133,15 @@ export default function RecordDetailModal({ visible, onClose, record, book, read
           <View style={styles.bottomGroup}>
             <View style={styles.tabSection}>
               {[
-                { key: 'light',  label: 'Light'  },
-                { key: 'dark',   label: 'Dark'   },
-                { key: 'style1', label: 'Style1' },
-                { key: 'style2', label: 'Style2' },
-              ].map(({ key, label }) => (
+                { key: 'light',  label: 'Light',  thumbnail: require('../assets/thmb_light.png')  },
+                { key: 'dark',   label: 'Dark',   thumbnail: require('../assets/thmb_dark.png')   },
+                { key: 'style1', label: 'Style1', thumbnail: require('../assets/thmb_style1.png') },
+                { key: 'style2', label: 'Style2', thumbnail: require('../assets/thmb_style2.png') },
+              ].map(({ key, label, thumbnail }) => (
                 <ResultStyleTab
                   key={key}
                   label={label}
+                  thumbnail={thumbnail}
                   selected={variant === key}
                   onPress={() => setVariant(key)}
                 />
@@ -185,6 +186,11 @@ export default function RecordDetailModal({ visible, onClose, record, book, read
           onEdit?.(updated);
           setEditVisible(false);
         }}
+        onComplete={() => {
+          setEditVisible(false);
+          onComplete?.();
+        }}
+        isLatestRecord={isLatestRecord}
       />
 
       <Modal visible={isCardMenuVisible} transparent animationType="none" onRequestClose={closeCardMenu}>

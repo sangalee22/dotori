@@ -12,6 +12,7 @@ import RecordDetailModal from '../components/RecordDetailModal';
 import SubTab from '../components/SubTab';
 import Button from '../components/Button';
 import PopupHeader from '../components/PopupHeader';
+import { useToast } from '../contexts/ToastContext';
 
 const HEADER_HEIGHT = 104;
 const MAIN_TAB_HEIGHT = 44;
@@ -159,16 +160,17 @@ function ReadingRecordCard({ book, lastRecord, totalDuration, readingDays, pct, 
           {readingDays > 0 && <Text style={cardStyles.daysText}>{readingDays}일 동안 독서 했어요</Text>}
         </View>
       </Pressable>
-      {!isLast && <View style={cardStyles.divider} />}
     </View>
   );
 }
 
 const cardStyles = StyleSheet.create({
   container: {
-    paddingHorizontal: Spacing.md,
+    paddingHorizontal: Spacing.xl,
     paddingVertical: Spacing.xl,
     gap: Spacing.sm,
+    backgroundColor: Colors.gray50,
+    borderRadius: BorderRadius.huge,
   },
   top: {
     flexDirection: 'row',
@@ -240,8 +242,9 @@ const cardStyles = StyleSheet.create({
   },
 });
 
-export default function DotoriRoomScreen({ readingBooks = [], reviews = [], readingRecords = [], wantToReadBooks = [], currentUser, activeTab = 'calendar', onBookPress, onReviewPress, onScroll, logoHeightAnim, onDeleteReadingRecord, onEditReadingRecord, onAddRecord }) {
+export default function DotoriRoomScreen({ readingBooks = [], reviews = [], readingRecords = [], wantToReadBooks = [], currentUser, activeTab = 'calendar', onBookPress, onReviewPress, onScroll, logoHeightAnim, onDeleteReadingRecord, onEditReadingRecord, onCompleteBook, onAddRecord }) {
   const insets = useSafeAreaInsets();
+  const { showToast } = useToast();
   const today = new Date();
   const [calYear, setCalYear] = React.useState(today.getFullYear());
   const [calMonth, setCalMonth] = React.useState(today.getMonth() + 1);
@@ -402,7 +405,7 @@ export default function DotoriRoomScreen({ readingBooks = [], reviews = [], read
 
             {bookshelfSubTab === 'reading' && (
               readingBooksFiltered.length > 0 ? (
-                <View>
+                <View style={{ paddingHorizontal: Spacing.md,gap: Spacing.md, paddingTop: Spacing.lg,paddingBottom: Spacing.huge }}>
                   {readingBooksFiltered.map((book, i) => {
                     const bookRecords = readingRecords.filter(r => r.isbn === book.isbn);
                     const lastRecord = [...bookRecords].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
@@ -535,6 +538,17 @@ export default function DotoriRoomScreen({ readingBooks = [], reviews = [], read
         book={detailItem?.book}
         readingDays={detailItem?.readingDays ?? 1}
         hideTime={detailItem?.hideTime ?? false}
+        isLatestRecord={(() => {
+          if (!detailItem?.record) return true;
+          const bookRecords = readingRecords.filter(r => String(r.isbn) === String(detailItem.record.isbn));
+          const sorted = [...bookRecords].sort((a, b) => {
+            const da = a.date ?? a.createdAt ?? '';
+            const db = b.date ?? b.createdAt ?? '';
+            if (da !== db) return db.localeCompare(da);
+            return (b.createdAt ?? '').localeCompare(a.createdAt ?? '');
+          });
+          return sorted[0]?.createdAt === detailItem.record.createdAt;
+        })()}
         onDelete={() => {
           onDeleteReadingRecord?.(detailItem?.record);
           setDetailItem(null);
@@ -542,6 +556,11 @@ export default function DotoriRoomScreen({ readingBooks = [], reviews = [], read
         onEdit={(updated) => {
           onEditReadingRecord?.(updated);
           setDetailItem(prev => prev ? { ...prev, record: updated } : null);
+        }}
+        onComplete={() => {
+          onCompleteBook?.(detailItem?.book);
+          setDetailItem(null);
+          setTimeout(() => showToast('완독! 한 권의 도토리가 쌓였어요 🌰'), 400);
         }}
       />
 

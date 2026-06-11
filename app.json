@@ -23,8 +23,10 @@
     "ios": {
       "bundleIdentifier": "com.sanga.dotori",
       "supportsTablet": true,
+      "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
+        "GADApplicationIdentifier": "ca-app-pub-9552392941451192~4380966810",
         "NSPhotoLibraryUsageDescription": "도토리룸에서 독후감에 사진을 추가하기 위해 사진첩 접근 권한이 필요합니다.",
         "LSApplicationQueriesSchemes": [
           "kakaokompassauth",
@@ -67,11 +69,19 @@
     },
     "plugins": [
       "expo-web-browser",
+      "expo-apple-authentication",
       [
         "@react-native-seoul/kakao-login",
         {
           "kakaoAppKey": "1b885f7c3d187e32d08f2db2c8a124b7",
           "kotlinVersion": "2.1.0"
+        }
+      ],
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-9552392941451192~4380966810",
+          "iosAppId": "ca-app-pub-9552392941451192~4380966810"
         }
       ]
     ],
