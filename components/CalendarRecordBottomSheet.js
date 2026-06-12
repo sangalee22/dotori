@@ -49,9 +49,9 @@ function RecordItem({ record, book, readingDays, isLast, onPress }) {
     <View>
       <Pressable style={styles.recordItem} onPress={onPress}>
         <View style={styles.cardTop}>
-          <Image source={{ uri: record.cover }} style={styles.cover} resizeMode="cover" />
+          <Image source={{ uri: book?.coverImage ?? book?.cover ?? record?.cover }} style={styles.cover} resizeMode="cover" />
           <View style={styles.info}>
-            <Text style={styles.bookTitle} numberOfLines={2}>{record.title?.split(' - ')[0].trim()}</Text>
+            <Text style={styles.bookTitle} numberOfLines={2}>{(book?.title ?? record?.title)?.split(' - ')[0].trim()}</Text>
             <Text style={styles.author} numberOfLines={1}>{book?.author ?? ''}</Text>
             <Text style={styles.time}>{formatTime(record.createdAt)}</Text>
             <Text style={styles.duration}>{formatDuration(record.duration)}</Text>

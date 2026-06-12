@@ -46,7 +46,6 @@ export default function useAppOpenAd(isLoggedIn) {
             adRef.current = ad;
             ad.load();
           } catch (e) {
-            console.error('Ad load error:', e);
           }
         };
 
@@ -61,7 +60,6 @@ export default function useAppOpenAd(isLoggedIn) {
           appState.current = nextState;
         });
       } catch (e) {
-        console.error('AdMob error:', e);
       }
     };
 

@@ -36,6 +36,7 @@ export default function RecordDetailModal({ visible, onClose, record, book, read
   ).current;
 
   const openCardMenu = () => {
+    if (variant !== 'style1' && variant !== 'style2') return;
     setIsCardMenuVisible(true);
     Animated.spring(cardMenuTranslateY, { toValue: 0, useNativeDriver: true, tension: 50, friction: 10 }).start();
   };

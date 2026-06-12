@@ -19,8 +19,6 @@ import Navigator from './components/Navigator';
 import BottomNavigation from './components/BottomNavigation';
 import BookDetail from './screens/BookDetail';
 import SearchScreen from './screens/SearchScreen';
-import CreateReadingRoom from './screens/CreateReadingRoom';
-import RoomFeed from './screens/RoomFeed';
 import SplashScreen from './screens/SplashScreen';
 import LoginScreen from './screens/LoginScreen';
 import NicknameInputScreen from './screens/NicknameInputScreen';
@@ -30,11 +28,9 @@ import DotoriRoomListScreen from './screens/DotoriRoomListScreen';
 import DotoriRoomScreen from './screens/DotoriRoomScreen';
 import MyScreen from './screens/MyScreen';
 import ModalPopup from './components/ModalPopup';
-import SettingIcon from './components/SettingIcon';
-import IconButton from './components/IconButton';
 import { registerUser, logout as firebaseLogout, withdrawUser, onAuthChange } from './services/auth';
 import useAppOpenAd from './hooks/useAppOpenAd';
-import { getUser, getUserBooks, getReadingRecords, getReviews, addReview, updateReview, deleteReview, setUserBook, removeUserBook, updateReviewsBookInfo, getBookReaderCount } from './services/firestore';
+import { getUser, getUserBooks, getReadingRecords, addReadingRecord, deleteReadingRecord, updateReadingRecord, getReviews, addReview, updateReview, deleteReview, toggleReviewLike, setUserBook, removeUserBook, updateReviewsBookInfo, getBookReaderCount } from './services/firestore';
 import { storage, auth } from './services/firebase';
 import { ref, uploadBytes, getDownloadURL, deleteObject, listAll } from 'firebase/storage';
 import { signInAnonymously } from 'firebase/auth';
@@ -81,14 +77,13 @@ export default function App() {
   const [activeBottomTab, setActiveBottomTab] = React.useState('home');
   const [showMySettings, setShowMySettings] = React.useState(false);
   const [feedTab, setFeedTab] = React.useState('all'); // 'all' | 'mine'
-  const [dotoriRoomTab, setDotoriRoomTab] = React.useState('calendar'); // 'calendar' | 'bookshelf'
   const logoHeightAnim = React.useRef(new Animated.Value(60)).current;
   const lastScrollY = React.useRef(0);
   const logoVisible = React.useRef(true);
 
-  // 피드/도토리룸 탭을 벗어나면 로고 복원
+  // 피드 탭을 벗어나면 로고 복원
   React.useEffect(() => {
-    if (activeBottomTab !== 'dotoriRoom' && activeBottomTab !== 'bookshelf') {
+    if (activeBottomTab !== 'dotoriRoom') {
       logoVisible.current = true;
       Animated.timing(logoHeightAnim, { toValue: 60, duration: 200, useNativeDriver: false }).start();
     }
@@ -106,12 +101,9 @@ export default function App() {
       Animated.timing(logoHeightAnim, { toValue: 60, duration: 200, useNativeDriver: false }).start();
     }
   }, []);
-  const [currentView, setCurrentView] = React.useState('home'); // 'home', 'bookDetail', 'search', 'createRoom', or 'roomFeed'
+  const [currentView, setCurrentView] = React.useState('home'); // 'home', 'bookDetail', 'search'
   const [previousView, setPreviousView] = React.useState('home'); // Track previous view for back navigation
   const [selectedBook, setSelectedBook] = React.useState(null);
-  const [selectedRoom, setSelectedRoom] = React.useState(null); // Store selected room data
-  const [showCreateRoomModal, setShowCreateRoomModal] = React.useState(false); // Show create room confirmation modal
-  const [pendingRoomData, setPendingRoomData] = React.useState(null); // Store room data for creation
   const openReadingModalRef = React.useRef(null);
   const [recentBooks, setRecentBooks] = React.useState([]); // Store recently viewed books
   const [recentSearches, setRecentSearches] = React.useState([]); // Store recent search terms
@@ -134,11 +126,15 @@ export default function App() {
   const [bookDetailOpenReviewModal, setBookDetailOpenReviewModal] = React.useState(false); // Whether to auto-open review modal
   const [bookDetailReviewInitialPage, setBookDetailReviewInitialPage] = React.useState(0);
   const [bookDetailReviewInitialImages, setBookDetailReviewInitialImages] = React.useState([]);
+  const [bookDetailEditReview, setBookDetailEditReview] = React.useState(null);
   const [bookDetailTargetReviewId, setBookDetailTargetReviewId] = React.useState(null);
   const bookListScrollRef = React.useRef(null);
+  const feedScrollRef = React.useRef(null);
+  const [feedRefreshTrigger, setFeedRefreshTrigger] = React.useState(0);
   const [activeBestIndex, setActiveBestIndex] = React.useState(0);
   const [carouselReady, setCarouselReady] = React.useState(false);
   const bestAutoSlideRef = React.useRef(null);
+  const userProfileCacheRef = React.useRef({});
 
   // 알라딘 API 상태 관리
   const [bestBooks, setBestBooks] = React.useState([]);
@@ -225,7 +221,6 @@ export default function App() {
           setReadingBooks([...seen.values()]);
         }
       } catch (error) {
-        console.error('Error loading reading books:', error);
       }
     };
     loadReadingBooks();
@@ -256,7 +251,6 @@ export default function App() {
       try {
         await AsyncStorage.setItem('readingBooks', JSON.stringify(readingBooks));
       } catch (error) {
-        console.error('Error saving reading books:', error);
       }
     };
     if (readingBooks.length > 0) saveReadingBooks();
@@ -304,8 +298,7 @@ export default function App() {
     const createdAt = r.createdAt?.toDate?.() ? r.createdAt.toDate().toISOString() : (r.createdAt ?? new Date().toISOString());
     const toHttps = (url) => url?.replace(/^http:\/\/image\.aladin\.co\.kr/, 'https://image.aladin.co.kr') || null;
 
-    // Firestore 플랫 필드(bookTitle/bookAuthor/bookCover/isbn) 우선 — 리뷰 작성 시 저장된 원본
-    // 없으면 중첩 book 객체 사용 (앱에서 작성한 리뷰)
+    // flat fields(bookTitle/bookAuthor/bookCover) 우선 → 없으면 중첩 book 객체 폴백 (구버전 호환)
     let book;
     if (r.bookTitle) {
       book = { title: r.bookTitle, author: r.bookAuthor || '', cover: toHttps(r.bookCover) };
@@ -317,7 +310,7 @@ export default function App() {
 
     return {
       ...r,
-      bookIsbn: r.bookIsbn ?? r.isbn,
+      bookIsbn: r.bookIsbn || r.isbn || null,
       createdAt,
       timeAgo: formatTimeAgo(createdAt),
       user: { name: r.userNickname ?? r.user?.name ?? '익명', profileImage: r.user?.profileImage ?? null },
@@ -326,6 +319,25 @@ export default function App() {
       book,
     };
   };
+
+  // profileImage가 없는 리뷰에 작성자 프로필 정보를 채워넣음 (구 데이터 호환)
+  const enrichWithProfiles = React.useCallback(async (reviewList) => {
+    // 세션 캐시에 없는 userId만 Firestore 조회 (profileImage 있어도 항상 users를 source of truth로 사용)
+    const uncachedIds = [...new Set(
+      reviewList
+        .filter(r => r.userId && !userProfileCacheRef.current[r.userId])
+        .map(r => r.userId)
+    )];
+    if (uncachedIds.length > 0) {
+      const profiles = await Promise.all(uncachedIds.map(id => getUser(id).catch(() => null)));
+      profiles.forEach((p, i) => { if (p) userProfileCacheRef.current[uncachedIds[i]] = p; });
+    }
+    return reviewList.map(r => {
+      const profile = userProfileCacheRef.current[r.userId];
+      if (!profile) return r;
+      return { ...r, user: { name: r.user?.name || profile.nickname || '익명', profileImage: profile.profileImage || null } };
+    });
+  }, []);
 
   // Load reviews: Firestore가 primary source, AsyncStorage는 로컬 전용 리뷰 보완용
   React.useEffect(() => {
@@ -340,7 +352,7 @@ export default function App() {
       try {
         const fbReviews = await getReviews();
         if (fbReviews.length > 0) {
-          const normalized = fbReviews.map(normalizeReview);
+          const normalized = await enrichWithProfiles(fbReviews.map(normalizeReview));
           setReviews(prev => {
             const fbIds = new Set(normalized.map(r => r.id));
             // Firestore 리뷰가 같은 ID의 로컬 리뷰를 덮어씀
@@ -394,29 +406,111 @@ export default function App() {
             }
             if (fbRecords.length > 0) setReadingRecords(fbRecords);
             if (fbReviews.length > 0) {
-              const normalized = fbReviews.map(normalizeReview);
+              const normalized = await enrichWithProfiles(fbReviews.map(normalizeReview));
               setReviews(prev => {
                 const fbIds = new Set(normalized.map(r => r.id));
                 const merged = [...normalized, ...prev.filter(r => !fbIds.has(r.id))];
                 return merged.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
               });
             }
+            syncPendingRecords(firebaseUser.uid);
           }
         } catch (e) {
-          console.error('Firebase data load error:', e);
         }
       }
     });
     return () => unsubscribe();
+  }, [syncPendingRecords]);
+
+  const clearLocalUserData = React.useCallback(async () => {
+    const keys = await AsyncStorage.getAllKeys().catch(() => []);
+    const dynamicKeys = keys.filter(k => k.startsWith('feedLike_') || k.startsWith('feedRevealed_'));
+    await AsyncStorage.multiRemove([
+      'readingBooks', 'wantToReadBooks', 'readingRecords', 'reviews',
+      'bookCache', 'timerState', 'timerPendingState',
+      ...dynamicKeys,
+    ]).catch(() => {});
+  }, []);
+
+  const syncPendingRecords = React.useCallback(async (userId) => {
+    try {
+      const raw = await AsyncStorage.getItem('pendingReadingRecords');
+      if (!raw) return;
+      const pending = JSON.parse(raw);
+      const userPending = pending.filter(r => r._userId === userId);
+      if (userPending.length === 0) return;
+
+      const succeeded = [];
+      const synced = [];
+      for (const item of userPending) {
+        try {
+          const { _userId, title: _t, cover: _c, totalPages: _tp, ...firestoreRecord } = item;
+          const docRef = await addReadingRecord(userId, firestoreRecord);
+          synced.push({ ...item, id: docRef.id });
+          succeeded.push(item.createdAt);
+        } catch {}
+      }
+
+      // Remove successfully synced from pending store
+      const remaining = pending.filter(r => !(r._userId === userId && succeeded.includes(r.createdAt)));
+      if (remaining.length === 0) {
+        await AsyncStorage.removeItem('pendingReadingRecords').catch(() => {});
+      } else {
+        await AsyncStorage.setItem('pendingReadingRecords', JSON.stringify(remaining)).catch(() => {});
+      }
+
+      // Merge synced records into readingRecords
+      if (synced.length > 0) {
+        setReadingRecords(prev => {
+          const existingKeys = new Set(prev.map(r => `${r.isbn}_${r.createdAt}`));
+          const newOnes = synced
+            .map(({ _userId, ...r }) => r)
+            .filter(r => !existingKeys.has(`${r.isbn}_${r.createdAt}`));
+          if (newOnes.length === 0) return prev;
+          const updated = [...prev, ...newOnes];
+          AsyncStorage.setItem('readingRecords', JSON.stringify(updated)).catch(() => {});
+          return updated;
+        });
+      }
+    } catch {}
   }, []);
 
   const handleSaveReadingRecord = React.useCallback(async (record) => {
+    if (currentUser?.id) {
+      try {
+        const { title: _t, cover: _c, totalPages: _tp, ...firestoreRecord } = record;
+        const docRef = await addReadingRecord(currentUser.id, firestoreRecord);
+        const saved = { ...record, id: docRef.id };
+        setReadingRecords(prev => {
+          const updated = [...prev, saved];
+          AsyncStorage.setItem('readingRecords', JSON.stringify(updated)).catch(() => {});
+          return updated;
+        });
+        if (record.totalPages > 0) {
+          setReadingBooks(prev => prev.map(b =>
+            String(b.isbn) === String(record.isbn) && b.totalPages === 0
+              ? { ...b, totalPages: record.totalPages }
+              : b
+          ));
+        }
+        return true;
+      } catch {
+        // Firestore 실패 시 pendingReadingRecords에 보관 (로그아웃해도 유지, 재로그인 시 동기화)
+        const pendingItem = { ...record, _userId: currentUser.id };
+        try {
+          const raw = await AsyncStorage.getItem('pendingReadingRecords');
+          const existing = raw ? JSON.parse(raw) : [];
+          await AsyncStorage.setItem('pendingReadingRecords', JSON.stringify([...existing, pendingItem]));
+        } catch {}
+        return false;
+      }
+    }
+    // 비로그인 상태: 로컬에만 저장
     setReadingRecords(prev => {
       const updated = [...prev, record];
       AsyncStorage.setItem('readingRecords', JSON.stringify(updated)).catch(() => {});
       return updated;
     });
-    // record에 totalPages가 있으면 readingBooks에도 반영
     if (record.totalPages > 0) {
       setReadingBooks(prev => prev.map(b =>
         String(b.isbn) === String(record.isbn) && b.totalPages === 0
@@ -424,9 +518,11 @@ export default function App() {
           : b
       ));
     }
-  }, []);
+    return true;
+  }, [currentUser]);
 
   const handleDeleteReadingRecord = React.useCallback((record) => {
+    if (record.id) deleteReadingRecord(record.id).catch(() => {});
     setReadingRecords(prev => {
       const updated = prev.filter(r => !(r.isbn === record.isbn && r.createdAt === record.createdAt));
       AsyncStorage.setItem('readingRecords', JSON.stringify(updated)).catch(() => {});
@@ -435,6 +531,10 @@ export default function App() {
   }, []);
 
   const handleEditReadingRecord = React.useCallback((updated) => {
+    if (updated.id) {
+      const { id, title: _t, cover: _c, totalPages: _tp, ...fields } = updated;
+      updateReadingRecord(id, fields).catch(() => {});
+    }
     setReadingRecords(prev => {
       const next = prev.map(r =>
         r.isbn === updated.isbn && r.createdAt === updated.createdAt ? updated : r
@@ -472,7 +572,6 @@ export default function App() {
       try {
         await AsyncStorage.setItem('reviews', JSON.stringify(reviews));
       } catch (error) {
-        console.error('Error saving reviews:', error);
       }
     };
     if (reviews.length > 0) {
@@ -577,50 +676,60 @@ export default function App() {
 
   // Add review handler
   const handleAddReview = async (newReview) => {
-    setReviews((prevReviews) => [normalizeReview(newReview), ...prevReviews]);
-
-    try {
-      const cloudImages = await uploadReviewImages(newReview.images, newReview.userId, newReview.id);
-
-      const firestoreData = {
-        userId: newReview.userId,
-        userNickname: newReview.user?.name || '익명',
-        bookIsbn: newReview.bookIsbn,
-        bookTitle: newReview.book?.title || '',
-        bookAuthor: newReview.book?.author || '',
-        bookCover: newReview.book?.cover || null,
-        type: newReview.type,
-        content: newReview.content,
-        page: newReview.page || null,
-        images: cloudImages || null,
-        isSpoiler: newReview.isSpoiler || false,
-        isCompleted: newReview.isCompleted || false,
-      };
-
-      const docRef = await addReview(firestoreData);
-
-      setReviews((prevReviews) =>
-        prevReviews.map(r =>
-          r.id === newReview.id
-            ? { ...r, id: docRef.id, ...(cloudImages && { images: cloudImages }) }
-            : r
-        )
-      );
-    } catch (e) {
-      console.error('리뷰 저장 실패:', e?.code, e?.message);
-    }
+    const cloudImages = await uploadReviewImages(newReview.images, newReview.userId, newReview.id);
+    const firestoreData = {
+      userId: newReview.userId,
+      user: { name: newReview.user?.name || '익명', profileImage: newReview.user?.profileImage || null },
+      bookIsbn: newReview.bookIsbn ?? newReview.isbn ?? null,
+      bookTitle: newReview.book?.title || null,
+      bookAuthor: newReview.book?.author || null,
+      bookCover: newReview.book?.cover || null,
+      type: newReview.type,
+      content: newReview.content,
+      page: newReview.page || null,
+      images: cloudImages || null,
+      isSpoiler: newReview.isSpoiler || false,
+      isCompleted: newReview.isCompleted || false,
+    };
+    const docRef = await addReview(firestoreData);
+    setReviews(prev => [
+      { ...normalizeReview(newReview), id: docRef.id, ...(cloudImages && { images: cloudImages }) },
+      ...prev,
+    ]);
   };
+
+  const handleToggleLike = React.useCallback(async (reviewId) => {
+    if (!currentUser?.id) return;
+    const userId = currentUser.id;
+    // 낙관적 업데이트
+    setReviews(prev => prev.map(r => {
+      if (r.id !== reviewId) return r;
+      const likes = Array.isArray(r.likes) ? r.likes : [];
+      const newLikes = likes.includes(userId)
+        ? likes.filter(id => id !== userId)
+        : [...likes, userId];
+      return { ...r, likes: newLikes };
+    }));
+    try {
+      await toggleReviewLike(reviewId, userId);
+    } catch (e) {
+      // 실패 시 롤백
+      setReviews(prev => prev.map(r => {
+        if (r.id !== reviewId) return r;
+        const likes = Array.isArray(r.likes) ? r.likes : [];
+        const rolledBack = likes.includes(userId)
+          ? likes.filter(id => id !== userId)
+          : [...likes, userId];
+        return { ...r, likes: rolledBack };
+      }));
+    }
+  }, [currentUser]);
 
   // Delete review handler
   const handleDeleteReview = async (reviewId) => {
-    const review = reviews.find(r => r.id === reviewId);
-    setReviews((prevReviews) => prevReviews.filter(r => r.id !== reviewId));
-    try {
-      await deleteReview(reviewId);
-    } catch (e) {
-      console.error('리뷰 삭제 실패:', e?.code, e?.message);
-    }
-    if (review?.images?.length > 0 && currentUser?.id) {
+    await deleteReview(reviewId);
+    setReviews(prev => prev.filter(r => r.id !== reviewId));
+    if (currentUser?.id) {
       try {
         const folder = ref(storage, `reviewImages/${currentUser.id}/${reviewId}`);
         const { items } = await listAll(folder);
@@ -629,32 +738,36 @@ export default function App() {
     }
   };
 
+  // Open BookDetail with edit modal pre-opened (from feed/my page)
+  const handleOpenEditReviewFromFeed = React.useCallback((reviewData) => {
+    const isbn = reviewData.bookIsbn;
+    const book = readingBooks.find(b => String(b.isbn) === String(isbn))
+      || (bookCache && bookCache[isbn])
+      || { isbn };
+    setSelectedBook(book);
+    setBookDetailInitialTab('reviews');
+    setBookDetailOpenReviewModal(false);
+    setBookDetailEditReview(reviewData);
+    setCurrentView('bookDetail');
+  }, [readingBooks, bookCache]);
+
   // Edit review handler
   const handleEditReview = async (reviewId, updatedData) => {
-    setReviews((prevReviews) =>
-      prevReviews.map(review =>
-        review.id === reviewId ? { ...review, ...updatedData } : review
+    const cloudImages = await uploadReviewImages(updatedData.images, currentUser?.id, reviewId);
+    const firestoreUpdate = {
+      type: updatedData.type,
+      content: updatedData.content,
+      page: updatedData.page ?? null,
+      images: cloudImages ?? null,
+      isSpoiler: updatedData.isSpoiler ?? false,
+    };
+    await updateReview(reviewId, firestoreUpdate);
+    setReviews(prev =>
+      prev.map(r => r.id === reviewId
+        ? { ...r, ...updatedData, ...(cloudImages && { images: cloudImages }) }
+        : r
       )
     );
-
-    try {
-      const cloudImages = await uploadReviewImages(updatedData.images, currentUser?.id, reviewId);
-      const firestoreUpdate = {
-        type: updatedData.type,
-        content: updatedData.content,
-        page: updatedData.page ?? null,
-        images: cloudImages ?? null,
-        isSpoiler: updatedData.isSpoiler ?? false,
-      };
-      await updateReview(reviewId, firestoreUpdate);
-      if (cloudImages) {
-        setReviews((prevReviews) =>
-          prevReviews.map(r => r.id === reviewId ? { ...r, images: cloudImages } : r)
-        );
-      }
-    } catch (e) {
-      console.error('리뷰 수정 실패:', e?.code, e?.message);
-    }
   };
 
   // Get the most recent active book (excluding completed books)
@@ -700,7 +813,6 @@ export default function App() {
         const books = await fetchBestsellers(effectiveCategoryId, 8);
         setBestBooks(books);
       } catch (error) {
-        console.error('베스트셀러 로딩 오류:', error);
         setBooksError('베스트셀러를 불러오는데 실패했습니다.');
         setBestBooks([]);
       } finally {
@@ -762,7 +874,6 @@ export default function App() {
         const books = await fetchNewBooks(1, 5); // 소설 카테고리 (ID: 1)
         setNewBooks(books);
       } catch (error) {
-        console.error('신간 로딩 오류:', error);
         setNewBooks([]);
       } finally {
         setIsLoadingNewBooks(false);
@@ -842,7 +953,7 @@ export default function App() {
         } catch {}
 
         // 검색 실패 시 Firestore URL (http→https 변환)
-        const storedCover = toHttps(review.book.cover || review.book.coverImage);
+        const storedCover = toHttps(review.book.cover);
         return storedCover !== review.book.cover
           ? { ...review, book: { ...review.book, cover: storedCover } }
           : review;
@@ -907,7 +1018,6 @@ export default function App() {
           <SafeAreaProvider>
             <NicknameInputScreen
               onNext={({ nickname }) => {
-                console.log('Nickname entered:', nickname);
                 setSignUpNickname(nickname);
                 setSignUpStep('terms');
               }}
@@ -930,25 +1040,22 @@ export default function App() {
             <TermsAgreementScreen
               onNext={async ({ agreedTerms }) => {
                 try {
-                  console.log('Completing sign up with nickname:', signUpNickname);
-                  console.log('Agreed terms:', agreedTerms);
                   // Register user with nickname
                   const userData = await registerUser(signUpUserInfo, signUpNickname);
-                  console.log('User registered:', userData);
-                  await AsyncStorage.multiRemove(['readingBooks', 'wantToReadBooks', 'readingRecords', 'reviews']);
+                  await clearLocalUserData();
                   setReadingBooks([]);
                   setWantToReadBooks([]);
                   setReadingRecords([]);
+                  setBookCache({});
                   setCurrentUser(userData);
                   const fbReviews = await getReviews().catch(() => []);
-                  if (fbReviews.length > 0) setReviews(fbReviews.map(normalizeReview));
+                  if (fbReviews.length > 0) setReviews(await enrichWithProfiles(fbReviews.map(normalizeReview)));
                   setIsLoggedIn(true);
                   setIsInSignUpFlow(false);
                   setSignUpUserInfo(null);
                   setSignUpStep('nickname');
                   setSignUpNickname('');
                 } catch (error) {
-                  console.error('Sign up error:', error);
                   alert(error.message || '회원가입에 실패했습니다.');
                 }
               }}
@@ -967,10 +1074,11 @@ export default function App() {
       <SafeAreaProvider>
         <LoginScreen
           onLogin={async (userInfo) => {
-            await AsyncStorage.multiRemove(['readingBooks', 'wantToReadBooks', 'readingRecords', 'reviews']);
+            await clearLocalUserData();
             setReadingBooks([]);
             setWantToReadBooks([]);
             setReadingRecords([]);
+            setBookCache({});
             const [userData, fbReviews, fbReadingBooks, fbCompletedBooks, fbWantBooks, fbRecords] = await Promise.all([
               getUser(userInfo.id),
               getReviews(),
@@ -984,15 +1092,15 @@ export default function App() {
               : { id: userInfo.id, nickname: userInfo.displayName || '테스트유저', email: userInfo.email || '', profileImage: userInfo.profileImage || null };
             setCurrentUser(fullUser);
             await AsyncStorage.setItem('currentUser', JSON.stringify(fullUser));
-            if (fbReviews.length > 0) setReviews(fbReviews.map(normalizeReview));
+            if (fbReviews.length > 0) setReviews(await enrichWithProfiles(fbReviews.map(normalizeReview)));
             const allReadingBooks = [...fbReadingBooks, ...fbCompletedBooks];
             if (allReadingBooks.length > 0) setReadingBooks(allReadingBooks);
             if (fbWantBooks.length > 0) setWantToReadBooks(fbWantBooks);
             if (fbRecords.length > 0) setReadingRecords(fbRecords);
+            syncPendingRecords(userInfo.id);
             setIsLoggedIn(true);
           }}
           onSignUp={(userInfo) => {
-            console.log('Starting sign up for:', userInfo);
             // Start sign-up flow
             setSignUpUserInfo(userInfo);
             setIsInSignUpFlow(true);
@@ -1009,7 +1117,7 @@ export default function App() {
           <StatusBar style="dark" translucent backgroundColor="transparent" />
 
           {/* Render different screens based on active bottom tab */}
-          {activeBottomTab === 'home' && (
+          <View style={{ flex: 1, display: activeBottomTab === 'home' ? 'flex' : 'none' }}>
             <ScrollView
               style={styles.scrollView}
               contentContainerStyle={styles.scrollContent}
@@ -1120,7 +1228,7 @@ export default function App() {
               horizontal
               showsHorizontalScrollIndicator={false}
               style={styles.bestList}
-              contentContainerStyle={{ paddingHorizontal: Spacing.md }}
+              contentContainerStyle={{ paddingLeft: Spacing.md }}
             >
               {recentBooks.slice(0, 4).map((book, index) => (
                 <BestBook
@@ -1253,10 +1361,10 @@ export default function App() {
           >
             {bestReviews.map((review, index) => {
               const bookData = {
-                isbn: review.bookIsbn,
+                isbn: review.bookIsbn || review.isbn,
                 title: review.book?.title || '',
                 author: review.book?.author || '',
-                coverImage: review.book?.cover || review.book?.coverImage,
+                coverImage: review.book?.cover,
               };
               return (
                 <BestReviewCard
@@ -1326,7 +1434,6 @@ export default function App() {
                     subtitle={subtitle}
                     author={book.author}
                     onPress={() => {
-                    console.log('📚 신간 선택:', book.title, 'ISBN:', book.isbn);
                     const bookData = {
                       isbn: book.isbn,
                       title: book.title,
@@ -1352,23 +1459,25 @@ export default function App() {
           )}
         </View>
           </ScrollView>
-          )}
+          </View>
 
           {/* 피드 Screen */}
-          {activeBottomTab === 'dotoriRoom' && (
+          <View style={{ flex: 1, display: activeBottomTab === 'dotoriRoom' ? 'flex' : 'none' }}>
             <DotoriRoomListScreen
               reviews={reviews}
               currentUser={currentUser}
               activeTab={feedTab}
               readingBooks={readingBooks}
               bookCache={bookCache}
+              scrollRef={feedScrollRef}
+              refreshTrigger={feedRefreshTrigger}
               onBookCacheUpdate={(isbn, data) => setBookCache(prev => ({ ...prev, [isbn]: data }))}
               onScroll={handleFeedScroll}
               onRefresh={async () => {
                 try {
                   const fbReviews = await getReviews();
                   if (fbReviews.length > 0) {
-                    const normalized = fbReviews.map(normalizeReview);
+                    const normalized = await enrichWithProfiles(fbReviews.map(normalizeReview));
                     setReviews(prev => {
                       const fbIds = new Set(normalized.map(r => r.id));
                       const merged = [...normalized, ...prev.filter(r => !fbIds.has(r.id))];
@@ -1381,25 +1490,25 @@ export default function App() {
                 // book 데이터 없는 리뷰에만 Firestore 업데이트 (bookTitle 있는 리뷰는 건드리지 않음)
                 updateReviewsBookInfo(isbn, bookData).catch(() => {});
               }}
+              onToggleLike={handleToggleLike}
               onBookPress={(book) => {
                 setSelectedBook(book);
                 addToRecentBooks(book);
                 setCurrentView('bookDetail');
               }}
+              onEditReview={handleOpenEditReviewFromFeed}
+              onDeleteReview={handleDeleteReview}
             />
-          )}
+          </View>
 
           {/* 도토리룸 Screen */}
-          {activeBottomTab === 'bookshelf' && (
+          <View style={{ flex: 1, display: activeBottomTab === 'bookshelf' ? 'flex' : 'none' }}>
             <DotoriRoomScreen
               readingBooks={readingBooks}
               reviews={reviews}
               readingRecords={readingRecords}
               wantToReadBooks={wantToReadBooks}
               currentUser={currentUser}
-              activeTab={dotoriRoomTab}
-              onScroll={handleFeedScroll}
-              logoHeightAnim={logoHeightAnim}
               onBookPress={(book) => {
                 setSelectedBook(book);
                 setBookDetailInitialTab('info');
@@ -1425,10 +1534,10 @@ export default function App() {
                 openReadingModalRef.current?.({ title: formatD(dateStr), addRecordMode: true, date: dateStr });
               }}
             />
-          )}
+          </View>
 
           {/* My Screen */}
-          {activeBottomTab === 'my' && (
+          <View style={{ flex: 1, display: activeBottomTab === 'my' ? 'flex' : 'none' }}>
             <MyScreen
               reviews={reviews}
               currentUser={currentUser}
@@ -1439,9 +1548,16 @@ export default function App() {
                 setCurrentView('bookDetail');
               }}
               showSettings={showMySettings}
+              onSettingsOpen={() => setShowMySettings(true)}
               onSettingsClose={() => setShowMySettings(false)}
               onLogout={async () => {
                 await firebaseLogout();
+                await clearLocalUserData();
+                setReadingBooks([]);
+                setWantToReadBooks([]);
+                setReadingRecords([]);
+                setReviews([]);
+                setBookCache({});
                 setShowMySettings(false);
                 setActiveBottomTab('home');
                 setIsLoggedIn(false);
@@ -1462,31 +1578,22 @@ export default function App() {
               onUpdateUser={(updatedData) => {
                 setCurrentUser(prev => ({ ...prev, ...updatedData }));
               }}
+              onEditReview={handleOpenEditReviewFromFeed}
+              onDeleteReview={handleDeleteReview}
             />
-          )}
+          </View>
 
-          {/* Main Header */}
-      <View style={styles.headerContainer}>
-        <SafeAreaView style={styles.headerSafeArea} edges={['top']}>
-          <MainHeader
-            onSearch={() => setCurrentView('search')}
-            tabs={
-              activeBottomTab === 'dotoriRoom' ? undefined : activeBottomTab === 'bookshelf' ? [
-                { id: 'calendar', label: '캘린더' },
-                { id: 'bookshelf', label: '책장' },
-              ] : undefined
-            }
-            activeTab={activeBottomTab === 'bookshelf' ? dotoriRoomTab : feedTab}
-            onTabChange={activeBottomTab === 'bookshelf' ? setDotoriRoomTab : setFeedTab}
-            logoHeightAnim={activeBottomTab === 'dotoriRoom' || activeBottomTab === 'bookshelf' ? logoHeightAnim : undefined}
-            rightButton={activeBottomTab === 'my' ? (
-              <IconButton onPress={() => setShowMySettings(true)}>
-                <SettingIcon />
-              </IconButton>
-            ) : undefined}
-          />
-        </SafeAreaView>
-      </View>
+          {/* Main Header - 피드/홈 탭에서만 표시 */}
+      {(activeBottomTab === 'home' || activeBottomTab === 'dotoriRoom') && (
+        <View style={styles.headerContainer}>
+          <SafeAreaView style={styles.headerSafeArea} edges={['top']}>
+            <MainHeader
+              onSearch={() => setCurrentView('search')}
+              logoHeightAnim={activeBottomTab === 'dotoriRoom' ? logoHeightAnim : undefined}
+            />
+          </SafeAreaView>
+        </View>
+      )}
 
       {/* Bottom Navigation */}
       <View style={styles.bottomNavContainer}>
@@ -1494,8 +1601,12 @@ export default function App() {
           <BottomNavigation
             activeTab={activeBottomTab}
             onTabPress={(tab) => {
+              if (tab === 'dotoriRoom' && activeBottomTab === 'dotoriRoom') {
+                feedScrollRef.current?.scrollTo({ y: 0, animated: true });
+                setFeedRefreshTrigger(n => n + 1);
+                return;
+              }
               setActiveBottomTab(tab);
-              console.log('Tab pressed:', tab);
             }}
             currentBooks={readingBooks
               .filter(book => !book.isCompleted)
@@ -1524,8 +1635,8 @@ export default function App() {
         </SafeAreaView>
       </View>
 
-      {/* BookDetail overlay - show when in bookDetail or createRoom view */}
-      {(currentView === 'bookDetail' || currentView === 'createRoom') && selectedBook && (() => {
+      {/* BookDetail overlay */}
+      {currentView === 'bookDetail' && selectedBook && (() => {
         // Find if this book is in reading state
         const readingBookData = readingBooks.find(book => String(book.isbn) === String(selectedBook.isbn));
 
@@ -1545,13 +1656,9 @@ export default function App() {
               setBookDetailReviewInitialPage(0);
               setBookDetailReviewInitialImages([]);
               setBookDetailTargetReviewId(null);
+              setBookDetailEditReview(null);
             }}
-            onMenu={() => console.log('Menu pressed')}
-            onCreateRoom={(bookData) => {
-              setSelectedBook(bookData);
-              setPreviousView(currentView);
-              setCurrentView('createRoom');
-            }}
+            onMenu={() => {}}
             onUpdateReading={(updateType, data) => {
               updateReadingBook(selectedBook, updateType, data);
             }}
@@ -1560,10 +1667,12 @@ export default function App() {
             reviewInitialPage={bookDetailReviewInitialPage}
             reviewInitialImages={bookDetailReviewInitialImages}
             targetReviewId={bookDetailTargetReviewId}
+            editReviewData={bookDetailEditReview}
             reviews={reviews}
             onAddReview={handleAddReview}
             onEditReview={handleEditReview}
             onDeleteReview={handleDeleteReview}
+            onToggleLike={handleToggleLike}
             currentUser={currentUser}
             initialReadingState={readingBookData ? {
               isReading: !readingBookData.isCompleted,
@@ -1617,70 +1726,6 @@ export default function App() {
         />
       )}
 
-      {/* CreateReadingRoom overlay - show on top of BookDetail */}
-      {currentView === 'createRoom' && selectedBook && (
-        <CreateReadingRoom
-          bookTitle={selectedBook.title}
-          bookSubtitle={selectedBook.subtitle}
-          author={selectedBook.author}
-          coverImage={selectedBook.coverImage}
-          onBack={() => {
-            // Keep selectedBook to show BookDetail when going back
-            setCurrentView(previousView);
-          }}
-          onNext={() => {
-            console.log('Next step - show confirmation modal');
-            // Store the room data and show confirmation modal
-            setPendingRoomData({
-              bookTitle: selectedBook.title,
-              author: selectedBook.author,
-              bookCoverImage: selectedBook.coverImage,
-              progress: 0, // New room starts at 0%
-              endDate: '2026.01.22', // This should come from CreateReadingRoom form
-              daysLeft: 35, // Calculate based on end date
-              myPage: 0,
-              isPrivate: false, // This should come from CreateReadingRoom form
-            });
-            setShowCreateRoomModal(true);
-          }}
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            zIndex: 300,
-          }}
-        />
-      )}
-
-      {/* RoomFeed overlay - show when viewing a room feed */}
-      {currentView === 'roomFeed' && selectedRoom && (
-        <RoomFeed
-          bookTitle={selectedRoom.bookTitle}
-          author={selectedRoom.author}
-          bookCoverImage={selectedRoom.bookCoverImage}
-          progress={selectedRoom.progress}
-          endDate={selectedRoom.endDate}
-          daysLeft={selectedRoom.daysLeft}
-          myPage={selectedRoom.myPage}
-          isPrivate={selectedRoom.isPrivate}
-          onBack={() => {
-            setSelectedRoom(null);
-            setCurrentView(previousView);
-          }}
-          onMenu={() => console.log('Menu pressed')}
-          onPost={() => console.log('Post pressed')}
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            zIndex: 400,
-          }}
-        />
-      )}
 
       {/* WeeklyBestDetail overlay */}
       {(currentView === 'weeklyBestDetail' || (currentView === 'bookDetail' && previousView === 'weeklyBestDetail')) && (
@@ -1707,34 +1752,6 @@ export default function App() {
         </View>
       )}
 
-      {/* Create Room Confirmation Modal */}
-      <ModalPopup
-        visible={showCreateRoomModal}
-        title="도토리룸을 만들까요?"
-        primaryButtonText="만들기"
-        secondaryButtonText="취소"
-        onPrimaryPress={() => {
-          console.log('Creating room and navigating to feed');
-          // Close modal
-          setShowCreateRoomModal(false);
-          // Set the room data
-          setSelectedRoom(pendingRoomData);
-          // Close CreateReadingRoom screen
-          setCurrentView('roomFeed');
-          // Clear selected book
-          setSelectedBook(null);
-          setPendingRoomData(null);
-        }}
-        onSecondaryPress={() => {
-          console.log('Cancelled room creation');
-          setShowCreateRoomModal(false);
-          setPendingRoomData(null);
-        }}
-        onClose={() => {
-          setShowCreateRoomModal(false);
-          setPendingRoomData(null);
-        }}
-      />
       </View>
       </ToastProvider>
     </SafeAreaProvider>

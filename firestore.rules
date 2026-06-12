@@ -1,0 +1,92 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── users ───────────────────────────────────────────────────────────────
+    match /users/{userId} {
+      // 피드 작성자 정보 표시, 닉네임 중복 확인을 위해 인증된 유저는 모두 읽기 가능
+      allow read: if request.auth != null;
+      // 본인 문서만 생성/수정/삭제
+      allow create, update, delete: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // ─── userBooks ────────────────────────────────────────────────────────────
+    match /userBooks/{docId} {
+      // 책 읽은 사람 수(getBookReaderCount) 조회를 위해 인증된 유저는 모두 읽기 가능
+      allow read: if request.auth != null;
+      // 생성: 반드시 본인 userId로만
+      allow create: if request.auth != null
+                    && request.resource.data.userId == request.auth.uid;
+      // 수정/삭제: 본인 데이터만
+      allow update, delete: if request.auth != null
+                             && resource.data.userId == request.auth.uid;
+    }
+
+    // ─── readingRecords ───────────────────────────────────────────────────────
+    match /readingRecords/{recordId} {
+      // 본인 기록만 읽기 가능
+      allow read: if request.auth != null
+                  && resource.data.userId == request.auth.uid;
+      // 생성: 반드시 본인 userId로만
+      allow create: if request.auth != null
+                    && request.resource.data.userId == request.auth.uid;
+      // 수정/삭제: 본인 데이터만
+      allow update, delete: if request.auth != null
+                             && resource.data.userId == request.auth.uid;
+    }
+
+    // ─── reviews ─────────────────────────────────────────────────────────────
+    match /reviews/{reviewId} {
+      // 공개 피드: 인증된 유저 모두 읽기 가능
+      allow read: if request.auth != null;
+      // 생성: 반드시 본인 userId로만
+      allow create: if request.auth != null
+                    && request.resource.data.userId == request.auth.uid;
+      // 수정:
+      //   - 본인 리뷰: 모든 필드 수정 가능
+      //   - 타인 리뷰: likes(좋아요 토글), book(책정보 보완) 필드만 허용
+      allow update: if request.auth != null && (
+        resource.data.userId == request.auth.uid
+        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes'])
+        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['book'])
+        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['bookTitle', 'bookAuthor', 'bookCover'])
+      );
+      // 삭제: 본인만
+      allow delete: if request.auth != null
+                    && resource.data.userId == request.auth.uid;
+    }
+
+    // ─── rooms ────────────────────────────────────────────────────────────────
+    match /rooms/{roomId} {
+      allow read: if request.auth != null;
+      // 생성: 반드시 본인 ownerId로만
+      allow create: if request.auth != null
+                    && request.resource.data.ownerId == request.auth.uid;
+      // 수정: 방장 전체 수정 가능, 참가자는 participantCount만 업데이트 가능
+      allow update: if request.auth != null && (
+        resource.data.ownerId == request.auth.uid
+        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participantCount'])
+      );
+      allow delete: if request.auth != null
+                    && resource.data.ownerId == request.auth.uid;
+    }
+
+    // ─── roomParticipants ─────────────────────────────────────────────────────
+    match /roomParticipants/{docId} {
+      allow read: if request.auth != null;
+      // 생성: 반드시 본인 userId로만
+      allow create: if request.auth != null
+                    && request.resource.data.userId == request.auth.uid;
+      // 수정/삭제: 본인 데이터만
+      allow update, delete: if request.auth != null
+                             && resource.data.userId == request.auth.uid;
+    }
+
+    // ─── withdrawalReasons ────────────────────────────────────────────────────
+    match /withdrawalReasons/{docId} {
+      // 탈퇴 사유: 생성만 가능 (읽기/수정/삭제는 운영자만 — Firebase Console에서 처리)
+      allow create: if request.auth != null;
+      allow read, update, delete: if false;
+    }
+  }
+}

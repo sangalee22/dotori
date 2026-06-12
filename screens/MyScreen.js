@@ -10,12 +10,13 @@ import { signInAnonymously } from 'firebase/auth';
 import { Colors, Spacing, Typography, BorderRadius } from '../styles';
 import UserProfile from '../components/UserProfile';
 import IconButton from '../components/IconButton';
-import EditIcon from '../components/EditIcon';
+import EditFillIcon from '../components/EditFillIcon';
 import PopupHeader from '../components/PopupHeader';
 import FeedItem from '../components/FeedItem';
 import SubTab from '../components/SubTab';
 import SimbolOutlineIcon from '../components/SimbolOutlineIcon';
 import SettingIcon from '../components/SettingIcon';
+import FireIcon from '../components/FireIcon';
 import TextField from '../components/TextField';
 import Button from '../components/Button';
 import DefaultHeader from '../components/DefaultHeader';
@@ -25,6 +26,7 @@ import ModalPopup from '../components/ModalPopup';
 import WithdrawModal from '../components/WithdrawModal';
 import Svg, { Path, Circle, G } from 'react-native-svg';
 import { formatTimeAgo } from '../utils/formatTimeAgo';
+import { useToast } from '../contexts/ToastContext';
 
 function KakaoIcon() {
   return (
@@ -56,8 +58,9 @@ function AppleIcon() {
   );
 }
 
-export default function MyScreen({ reviews = [], currentUser, readingRecords = [], readingBooks = [], onBookPress, showSettings = false, onSettingsClose, onLogout, onWithdraw, onUpdateUser }) {
+export default function MyScreen({ reviews = [], currentUser, readingRecords = [], readingBooks = [], onBookPress, showSettings = false, onSettingsClose, onSettingsOpen, onLogout, onWithdraw, onUpdateUser, onEditReview, onDeleteReview }) {
   const insets = useSafeAreaInsets();
+  const { showToast } = useToast();
   const [isProfileModalVisible, setIsProfileModalVisible] = React.useState(false);
   const profileModalTranslateY = React.useRef(new Animated.Value(300)).current;
   const [showProfileEdit, setShowProfileEdit] = React.useState(false);
@@ -145,7 +148,6 @@ export default function MyScreen({ reviews = [], currentUser, readingRecords = [
     handleCloseProfileModal();
     if (!result.canceled && result.assets?.length > 0) {
       const localUri = result.assets[0].uri;
-      setUser(prev => ({ ...prev, profileImage: localUri }));
       try {
         let profileImage = localUri;
         if (currentUser?.id) {
@@ -155,16 +157,18 @@ export default function MyScreen({ reviews = [], currentUser, readingRecords = [
           const storageRef = ref(storage, `profileImages/${currentUser.id}`);
           await uploadBytes(storageRef, blob);
           profileImage = await getDownloadURL(storageRef);
+          await updateUser(currentUser.id, { profileImage });
         }
         setUser(prev => ({ ...prev, profileImage }));
-        if (currentUser?.id) await updateUser(currentUser.id, { profileImage });
         const stored = await AsyncStorage.getItem('currentUser');
         if (stored) {
           const updated = { ...JSON.parse(stored), profileImage };
           await AsyncStorage.setItem('currentUser', JSON.stringify(updated));
           onUpdateUser?.(updated);
         }
-      } catch (e) { console.error('프로필 이미지 업로드 실패:', e?.code, e?.message); }
+      } catch (e) {
+        showToast('수정에 실패했어요. 다시 시도해주세요.');
+      }
     }
   };
 
@@ -242,36 +246,60 @@ export default function MyScreen({ reviews = [], currentUser, readingRecords = [
     return dates.size;
   }, [readingRecords]);
 
+  const [scrollY, setScrollY] = React.useState(0);
+  const [profileSectionHeight, setProfileSectionHeight] = React.useState(0);
+  const MY_HEADER_HEIGHT = 44;
+  const stickyTabTop = insets.top + MY_HEADER_HEIGHT;
+  const isTabSticky = profileSectionHeight > 0 && scrollY > profileSectionHeight;
+
   return (
     <>
       <View style={styles.container}>
+        {/* 마이페이지 전용 헤더 */}
+        <View style={[styles.myHeader, { paddingTop: insets.top }]}>
+          <View style={styles.myHeaderLeft}>
+            <FireIcon width={22} height={22} />
+            <Text style={styles.myHeaderText}>
+              <Text style={styles.myHeaderHighlight}>{readingDays}일째 </Text>독서중이에요
+            </Text>
+          </View>
+          <IconButton onPress={onSettingsOpen}>
+            <SettingIcon />
+          </IconButton>
+        </View>
+
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={[styles.contentContainer, { paddingTop: insets.top + 60 }]}
+          contentContainerStyle={[styles.contentContainer, { paddingTop: insets.top + 44 }]}
           showsVerticalScrollIndicator={false}
+          onScroll={(e) => setScrollY(e.nativeEvent.contentOffset.y)}
+          scrollEventThrottle={16}
         >
           {/* 프로필 영역 */}
-          <View style={styles.profileSection}>
+          <View
+            style={styles.profileSection}
+            onLayout={(e) => setProfileSectionHeight(e.nativeEvent.layout.height)}
+          >
             <TouchableOpacity style={styles.profileImageContainer} onPress={handleOpenProfileEdit} activeOpacity={0.7}>
               <UserProfile imageUri={user.profileImage} size={64} style={styles.profileImage} />
               <View style={styles.editIconButton}>
                 <IconButton size={28} onPress={handleOpenProfileEdit}>
-                  <EditIcon />
+                  <EditFillIcon />
                 </IconButton>
               </View>
             </TouchableOpacity>
             <View style={styles.profileInfo}>
               <Text style={styles.userName}>{user.nickname}</Text>
-              <Text style={styles.readingDays}>
-                <Text style={styles.readingDaysHighlight}>{readingDays}일째 </Text>독서중이에요
-              </Text>
             </View>
           </View>
 
-          {/* 탭 */}
-          <View style={styles.tabRow}>
-            <SubTab active={true}>독후감</SubTab>
-          </View>
+          {/* 탭 - 스크롤 내 위치 (sticky 아닐 때만 표시) */}
+          {!isTabSticky && (
+            <View style={styles.tabRow}>
+              <SubTab active={true}>독후감</SubTab>
+            </View>
+          )}
+          {isTabSticky && <View style={{ height: 49 }} />}
 
           {/* 내 독후감 피드 */}
           {myReviews.length > 0 ? (
@@ -295,6 +323,15 @@ export default function MyScreen({ reviews = [], currentUser, readingRecords = [
                   showBookInfo={true}
                   book={getBook(item)}
                   onBookPress={(book) => onBookPress && onBookPress({ ...book, isbn: item.bookIsbn, coverImage: book?.cover })}
+                  onEdit={onEditReview ? (reviewData) => onEditReview({ ...reviewData, bookIsbn: item.bookIsbn ?? item.isbn }) : undefined}
+                  onDelete={onDeleteReview ? async (id) => {
+                    try {
+                      await onDeleteReview(id);
+                      showToast('독후감이 삭제되었어요.');
+                    } catch {
+                      showToast('삭제에 실패했어요. 다시 시도해주세요.');
+                    }
+                  } : undefined}
                 />
               ))}
             </View>
@@ -305,6 +342,15 @@ export default function MyScreen({ reviews = [], currentUser, readingRecords = [
             </View>
           )}
         </ScrollView>
+
+        {/* Sticky 탭 */}
+        {isTabSticky && (
+          <View style={[styles.stickyTabRow, { top: stickyTabTop }]}>
+            <View style={styles.tabRow}>
+              <SubTab active={true}>독후감</SubTab>
+            </View>
+          </View>
+        )}
       </View>
 
       {/* 프로필 수정 서브 페이지 */}
@@ -326,7 +372,7 @@ export default function MyScreen({ reviews = [], currentUser, readingRecords = [
               <UserProfile imageUri={user.profileImage} size={80} style={styles.profileEditImage} />
               <View style={styles.profileEditIconButton}>
                 <IconButton size={28} onPress={handleOpenProfileModal}>
-                  <EditIcon />
+                  <EditFillIcon />
                 </IconButton>
               </View>
             </View>
@@ -481,6 +527,33 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.white,
   },
+  myHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    backgroundColor: Colors.white,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingRight: Spacing.xs,
+    paddingLeft: Spacing.md,
+    paddingHorizontal: Spacing.xxs,
+  },
+  myHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xxs,
+  },
+  myHeaderText: {
+    ...Typography.body1Regular,
+    color: Colors.gray900,
+  },
+  myHeaderHighlight: {
+    ...Typography.body1Medium,
+    color: Colors.primary600,
+  },
   scrollView: {
     flex: 1,
   },
@@ -492,9 +565,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.md,
     paddingHorizontal: Spacing.md,
-    // paddingVertical: Spacing.lg,
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.xxl,
+    paddingTop: Spacing.xs,
+    marginBottom: Spacing.sm,
   },
   profileImageContainer: {
     position: 'relative',
@@ -503,7 +575,7 @@ const styles = StyleSheet.create({
   profileImage: {
     width: 56,
     height: 56,
-    borderRadius: BorderRadius.xxl,
+    borderRadius: BorderRadius.xl,
     borderWidth: 1,
     borderColor: Colors.gray100,
   },
@@ -520,18 +592,19 @@ const styles = StyleSheet.create({
     ...Typography.headline2Medium,
     color: Colors.gray900,
   },
-  readingDays: {
-    ...Typography.body2Regular,
-    color: Colors.gray900,
-  },
-  readingDaysHighlight: {
-    color: Colors.primary600,
-  },
   tabRow: {
     flexDirection: 'row',
     paddingHorizontal: Spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: Colors.gray50,
+    backgroundColor: Colors.white,
+  },
+  stickyTabRow: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    zIndex: 9,
+    backgroundColor: Colors.white,
   },
   feedList: {
     // paddingHorizontal: Spacing.md,

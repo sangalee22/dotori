@@ -13,7 +13,6 @@ import CloseIcon from './CloseIcon';
 import DefaultHeader from './DefaultHeader';
 import PopupHeader from './PopupHeader';
 import ModalPopup from './ModalPopup';
-import Toast from './Toast';
 
 /**
  * FeedItem Component
@@ -51,20 +50,21 @@ export default function FeedItem({
   isMyReview = false,
   showBookInfo = false,
   book,
+  currentUser,
+  onToggleLike,
   onBookPress,
   onRevealSpoiler,
   onDelete,
   onEdit,
   style,
 }) {
-  const [isLiked, setIsLiked] = React.useState(false);
-  const [likeCount, setLikeCount] = React.useState(Array.isArray(likes) ? likes.length : (likes ?? 0));
+  const likeArray = Array.isArray(likes) ? likes : [];
+  const [isLiked, setIsLiked] = React.useState(() => !!currentUser?.id && likeArray.includes(currentUser.id));
+  const [likeCount, setLikeCount] = React.useState(likeArray.length);
   const [isRevealed, setIsRevealed] = React.useState(false);
   const [isMoreModalVisible, setIsMoreModalVisible] = React.useState(false);
   const [isDeleteConfirmVisible, setIsDeleteConfirmVisible] = React.useState(false);
-  const [toastVisible, setToastVisible] = React.useState(false);
-  const [toastMessage, setToastMessage] = React.useState('');
-  const [isImageViewerVisible, setIsImageViewerVisible] = React.useState(false);
+const [isImageViewerVisible, setIsImageViewerVisible] = React.useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = React.useState(0);
   const insets = useSafeAreaInsets();
   const moreModalTranslateY = React.useRef(new Animated.Value(300)).current;
@@ -114,49 +114,27 @@ export default function FeedItem({
     })
   ).current;
 
-  // Load saved states on mount
+  // likes prop 변경 시 동기화 (리프레시 등)
   React.useEffect(() => {
-    const loadStates = async () => {
-      try {
-        // Load like state
-        const savedLikeState = await AsyncStorage.getItem(`feedLike_${id}`);
-        if (savedLikeState !== null) {
-          const { isLiked: savedIsLiked, likeCount: savedLikeCount } = JSON.parse(savedLikeState);
-          setIsLiked(savedIsLiked);
-          setLikeCount(savedLikeCount);
-        }
+    const arr = Array.isArray(likes) ? likes : [];
+    setLikeCount(arr.length);
+    setIsLiked(!!currentUser?.id && arr.includes(currentUser.id));
+  }, [likes, currentUser?.id]);
 
-        // Load revealed state
-        const savedRevealedState = await AsyncStorage.getItem(`feedRevealed_${id}`);
-        if (savedRevealedState !== null) {
-          setIsRevealed(JSON.parse(savedRevealedState));
-        }
-      } catch (error) {
-        console.error('Error loading states:', error);
-      }
-    };
-
-    if (id) {
-      loadStates();
-    }
+  // 스포일러 노출 상태 로드
+  React.useEffect(() => {
+    if (!id) return;
+    AsyncStorage.getItem(`feedRevealed_${id}`).then(v => {
+      if (v !== null) setIsRevealed(JSON.parse(v));
+    }).catch(() => {});
   }, [id]);
 
-  const handleLikePress = async () => {
-    const newIsLiked = !isLiked;
-    const newLikeCount = newIsLiked ? likeCount + 1 : likeCount - 1;
-
-    setIsLiked(newIsLiked);
-    setLikeCount(newLikeCount);
-
-    // Save to AsyncStorage
-    try {
-      await AsyncStorage.setItem(
-        `feedLike_${id}`,
-        JSON.stringify({ isLiked: newIsLiked, likeCount: newLikeCount })
-      );
-    } catch (error) {
-      console.error('Error saving like state:', error);
-    }
+  const handleLikePress = () => {
+    if (!onToggleLike || !currentUser?.id) return;
+    // 낙관적 UI 업데이트
+    setIsLiked(prev => !prev);
+    setLikeCount(prev => isLiked ? prev - 1 : prev + 1);
+    onToggleLike(id);
   };
 
   const handleRevealSpoiler = async () => {
@@ -166,7 +144,6 @@ export default function FeedItem({
     try {
       await AsyncStorage.setItem(`feedRevealed_${id}`, JSON.stringify(true));
     } catch (error) {
-      console.error('Error saving revealed state:', error);
     }
 
     // Call the optional callback
@@ -224,15 +201,9 @@ export default function FeedItem({
 
   const handleConfirmDelete = () => {
     setIsDeleteConfirmVisible(false);
-
-    // Call deletion callback
     if (onDelete) {
       onDelete(id);
     }
-
-    // Show toast
-    setToastMessage('독후감이 삭제되었어요');
-    setToastVisible(true);
   };
 
   const handleCancelDelete = () => {
@@ -301,7 +272,6 @@ export default function FeedItem({
                   source={{ uri: book.cover }}
                   style={{ width: '100%', height: '100%' }}
                   resizeMode="cover"
-                  onError={() => console.log('[Cover] load failed:', book.cover)}
                 />
               ) : (
                 <View style={[{ width: '100%', height: '100%' }, styles.bookCoverPlaceholder]} />
@@ -475,20 +445,8 @@ export default function FeedItem({
       onClose={handleCancelDelete}
     />
 
-    {/* Toast */}
-    {toastVisible && (
-      <Modal visible={toastVisible} transparent animationType="none" statusBarTranslucent>
-        <View style={{ flex: 1, pointerEvents: 'box-none' }}>
-          <Toast
-            visible={toastVisible}
-            message={toastMessage}
-            onHide={() => setToastVisible(false)}
-          />
-        </View>
-      </Modal>
-    )}
 
-    {/* Image Viewer Modal */}
+{/* Image Viewer Modal */}
     {isImageViewerVisible && (
       <Modal
         visible={isImageViewerVisible}

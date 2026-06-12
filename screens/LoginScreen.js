@@ -78,7 +78,6 @@ export default function LoginScreen({ onLogin, onSignUp }) {
         onLogin?.(result.userInfo);
       }
     } catch (error) {
-      console.error('Google login error:', error);
       Alert.alert('로그인 실패', error.message || '구글 로그인에 실패했습니다.');
     } finally {
       setIsLoading(false);
@@ -90,7 +89,6 @@ export default function LoginScreen({ onLogin, onSignUp }) {
 
     try {
       setIsLoading(true);
-      console.log('Kakao login initiated');
 
       const result = await loginWithKakao();
 
@@ -98,19 +96,16 @@ export default function LoginScreen({ onLogin, onSignUp }) {
         setConflictInfo({ existingProvider: result.existingProvider, pendingUserInfo: result.userInfo });
       } else if (result.isNewUser) {
         // New user - go to sign up screen
-        console.log('New user detected, navigating to sign up');
         if (onSignUp) {
           onSignUp(result.userInfo);
         }
       } else {
         // Existing user - log in and go to main page
-        console.log('Existing user, logging in');
         if (onLogin) {
           onLogin(result.userInfo);
         }
       }
     } catch (error) {
-      console.error('Kakao login error:', error);
       Alert.alert('로그인 실패', error.message || '카카오 로그인에 실패했습니다.');
     } finally {
       setIsLoading(false);
@@ -131,7 +126,6 @@ export default function LoginScreen({ onLogin, onSignUp }) {
       }
     } catch (error) {
       if (error.code !== 'ERR_REQUEST_CANCELED') {
-        console.error('Apple login error:', error);
         Alert.alert('로그인 실패', error.message || 'Apple 로그인에 실패했습니다.');
       }
     } finally {
@@ -154,7 +148,6 @@ export default function LoginScreen({ onLogin, onSignUp }) {
           onLogin?.(result.userInfo);
         }
       } catch (error) {
-        console.error('Google login error:', error);
         Alert.alert('로그인 실패', error.message || '구글 로그인에 실패했습니다.');
         setIsLoading(false);
       }
@@ -208,15 +201,6 @@ export default function LoginScreen({ onLogin, onSignUp }) {
             )}
           </View>
 
-          {__DEV__ && (
-            <TouchableOpacity
-              onPress={() => onLogin?.({ id: 'dev_test_user', email: 'test@dotori.dev', displayName: '테스트유저' })}
-              activeOpacity={0.7}
-              style={styles.devButton}
-            >
-              <Text style={styles.devButtonText}>🛠 테스트로 시작하기 (개발용)</Text>
-            </TouchableOpacity>
-          )}
         </View>
       </SafeAreaView>
 
@@ -293,18 +277,5 @@ const styles = StyleSheet.create({
     ...Typography.headline3Medium,
     color: Colors.white,
     marginTop: Spacing.md,
-  },
-  devButton: {
-    marginTop: Spacing.md,
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.lg,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-  },
-  devButtonText: {
-    ...Typography.body2Medium,
-    color: Colors.white,
   },
 });

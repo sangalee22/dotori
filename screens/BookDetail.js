@@ -1,6 +1,5 @@
 import React from 'react';
 import { StyleSheet, View, Text, Image, ScrollView, Animated, PanResponder, Dimensions, ActivityIndicator, Modal, Pressable, KeyboardAvoidingView, Platform, TouchableOpacity, InputAccessoryView, Keyboard } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -71,6 +70,7 @@ export default function BookDetail({
   onAddReview,
   onEditReview,
   onDeleteReview,
+  onToggleLike,
   reviews = [],
   currentUser,
   initialTab = 'info',
@@ -79,6 +79,7 @@ export default function BookDetail({
   reviewInitialImages = [],
   targetReviewId = null,
   initialReadingState = null,
+  editReviewData = null,
   style,
 }) {
   const insets = useSafeAreaInsets();
@@ -114,6 +115,7 @@ export default function BookDetail({
   const [reviewPageInput, setReviewPageInput] = React.useState('');
   const [reviewContent, setReviewContent] = React.useState('');
   const [isSpoiler, setIsSpoiler] = React.useState(true);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [toastVisible, setToastVisible] = React.useState(false);
   const [toastMessage, setToastMessage] = React.useState('');
   const [helpTooltipVisible, setHelpTooltipVisible] = React.useState(false);
@@ -128,6 +130,27 @@ export default function BookDetail({
   const [editingReviewId, setEditingReviewId] = React.useState(null); // Track which review is being edited
   const [isEditMode, setIsEditMode] = React.useState(false); // Track if we're in edit mode
   const reviewModalTranslateY = React.useRef(new Animated.Value(Dimensions.get('window').height)).current;
+
+  // Auto-open edit modal when editReviewData is provided
+  React.useEffect(() => {
+    if (!editReviewData) return;
+    const timer = setTimeout(() => {
+      setIsEditMode(true);
+      setEditingReviewId(editReviewData.id);
+      setReviewPageInput(editReviewData.page ? String(editReviewData.page) : '');
+      setReviewContent(editReviewData.content);
+      setIsSpoiler(editReviewData.isSpoiler);
+      setSelectedImages(editReviewData.images || []);
+      setIsReviewModalVisible(true);
+      Animated.spring(reviewModalTranslateY, {
+        toValue: 0,
+        useNativeDriver: false,
+        tension: 50,
+        friction: 10,
+      }).start();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [editReviewData]);
 
   // Auto-open review modal if requested
   React.useEffect(() => {
@@ -165,7 +188,6 @@ export default function BookDetail({
   const [showUpToMyProgress, setShowUpToMyProgress] = React.useState(false); // Filter reviews by progress
   const [sortOrder, setSortOrder] = React.useState('latest'); // 'latest' or 'likes'
   const [isSortModalVisible, setIsSortModalVisible] = React.useState(false);
-  const [reviewLikeCounts, setReviewLikeCounts] = React.useState({}); // Track actual like counts from AsyncStorage
   const sortModalTranslateY = React.useRef(new Animated.Value(300)).current;
 
   // Sticky tab calculation
@@ -174,29 +196,6 @@ export default function BookDetail({
   const HEADER_HEIGHT = 52 + insets.top;
   const isTabSticky = bookTopSectionHeight > 0 && scrollYPos > (bookTopSectionHeight - HEADER_HEIGHT);
 
-  // Load like counts from AsyncStorage for all reviews
-  React.useEffect(() => {
-    const loadLikeCounts = async () => {
-      const counts = {};
-      for (const review of reviews) {
-        try {
-          const savedLikeState = await AsyncStorage.getItem(`feedLike_${review.id}`);
-          if (savedLikeState) {
-            const { likeCount } = JSON.parse(savedLikeState);
-            counts[review.id] = likeCount;
-          } else {
-            counts[review.id] = review.likes || 0;
-          }
-        } catch (error) {
-          console.error('Error loading like count:', error);
-          counts[review.id] = review.likes || 0;
-        }
-      }
-      setReviewLikeCounts(counts);
-    };
-
-    loadLikeCounts();
-  }, [reviews]);
 
   // Filter reviews for this book and sort
   const bookReviews = React.useMemo(() => {
@@ -221,25 +220,16 @@ export default function BookDetail({
     if (sortOrder === 'latest') {
       return filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     } else if (sortOrder === 'likes') {
-      // Use actual like counts from AsyncStorage
       return filtered.sort((a, b) => {
-        const aLikes = reviewLikeCounts[a.id] !== undefined ? reviewLikeCounts[a.id] : (a.likes || 0);
-        const bLikes = reviewLikeCounts[b.id] !== undefined ? reviewLikeCounts[b.id] : (b.likes || 0);
-
-        console.log(`Comparing: a.id=${a.id}, aLikes=${aLikes}, b.id=${b.id}, bLikes=${bLikes}`);
-
-        // If like counts are different, sort by likes (descending)
-        if (bLikes !== aLikes) {
-          return bLikes - aLikes;
-        }
-
-        // If like counts are equal (including 0), sort by creation date (newest first)
+        const aLikes = Array.isArray(a.likes) ? a.likes.length : (a.likes || 0);
+        const bLikes = Array.isArray(b.likes) ? b.likes.length : (b.likes || 0);
+        if (bLikes !== aLikes) return bLikes - aLikes;
         return new Date(b.createdAt) - new Date(a.createdAt);
       });
     }
 
     return filtered;
-  }, [reviews, isbn, showUpToMyProgress, currentPage, sortOrder, reviewLikeCounts]);
+  }, [reviews, isbn, showUpToMyProgress, currentPage, sortOrder]);
 
   // Page edit modal state
   const [isPageEditModalVisible, setIsPageEditModalVisible] = React.useState(false);
@@ -677,6 +667,7 @@ export default function BookDetail({
     if (selectedImages.length >= 5) {
       setToastMessage('이미지는 최대 5장까지만 추가할 수 있어요.');
       setToastVisible(true);
+      setTimeout(() => setToastVisible(false), 2000);
       return;
     }
     try {
@@ -697,13 +688,11 @@ export default function BookDetail({
       });
 
       if (!result.canceled && result.assets) {
-        // Add selected images to the existing array (max 5)
         const newImages = result.assets.map(asset => asset.uri);
         const combinedImages = [...selectedImages, ...newImages].slice(0, 5);
         setSelectedImages(combinedImages);
       }
     } catch (error) {
-      console.error('Image picker error:', error);
       showToast('사진을 선택하는 중 오류가 발생했습니다.');
     }
   };
@@ -713,11 +702,10 @@ export default function BookDetail({
     setSelectedImages(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleSubmitReview = () => {
-    // Parse page - allow empty page
+  const handleSubmitReview = async () => {
+    if (isSubmitting) return;
     const page = reviewPageInput.trim() ? parseInt(reviewPageInput, 10) : null;
 
-    // Validate page only if it was provided
     if (reviewPageInput.trim() && (isNaN(page) || page < 0)) {
       setToastMessage('올바른 페이지 번호를 입력해주세요');
       setToastVisible(true);
@@ -733,78 +721,62 @@ export default function BookDetail({
       return;
     }
 
-    if (isEditMode && editingReviewId) {
-      // Update existing review
-      const updatedReview = {
-        id: editingReviewId,
-        type: selectedImages.length > 0 ? 'img' : (isSpoiler ? 'spo' : 'text'),
-        page: page || null,
-        content: reviewContent,
-        images: selectedImages.length > 0 ? selectedImages : undefined,
-        isSpoiler,
-        updatedAt: new Date().toISOString(),
-      };
-
-      // Call parent callback to update review
-      if (onEditReview) {
-        onEditReview(editingReviewId, updatedReview);
+    setIsSubmitting(true);
+    try {
+      if (isEditMode && editingReviewId) {
+        const updatedReview = {
+          id: editingReviewId,
+          type: selectedImages.length > 0 ? 'img' : (isSpoiler ? 'spo' : 'text'),
+          page: page || null,
+          content: reviewContent,
+          images: selectedImages.length > 0 ? selectedImages : undefined,
+          isSpoiler,
+          updatedAt: new Date().toISOString(),
+        };
+        if (onEditReview) await onEditReview(editingReviewId, updatedReview);
+        handleCloseReview();
+        showToast('독후감이 수정되었습니다.');
+      } else {
+        const newReview = {
+          id: Date.now().toString(),
+          type: selectedImages.length > 0 ? 'img' : (isSpoiler ? 'spo' : 'text'),
+          userId: currentUser?.id,
+          user: {
+            name: currentUser?.nickname || currentUser?.name || '익명',
+            profileImage: currentUser?.profileImage || null,
+          },
+          timeAgo: '방금 전',
+          page: page || null,
+          content: reviewContent,
+          images: selectedImages.length > 0 ? selectedImages : undefined,
+          likes: 0,
+          comments: 0,
+          isSpoiler,
+          isCompleted: isCompleted,
+          bookIsbn: isbn,
+          book: {
+            title: displayTitle,
+            author: mainAuthors.length > 0 ? mainAuthors.map(a => a.name).join(', ') : author.split(',')[0].trim(),
+            cover: displayCover,
+          },
+          createdAt: new Date().toISOString(),
+        };
+        if (onAddReview) await onAddReview(newReview);
+        if (onUpdateReading && page) {
+          onUpdateReading('addReview', { currentPage: page, totalPages, isCompleted: false });
+        }
+        handleCloseReview();
+        setActiveTab('reviews');
+        setTimeout(() => { scrollViewRef.current?.scrollTo({ y: 0, animated: true }); }, 100);
+        showToast('독후감이 등록되었습니다.');
       }
-
-      // Close modal
-      handleCloseReview();
-
-      showToast('독후감이 수정되었습니다.');
-    } else {
-      // Create new review
-      const newReview = {
-        id: Date.now().toString(),
-        type: selectedImages.length > 0 ? 'img' : (isSpoiler ? 'spo' : 'text'),
-        userId: currentUser?.id, // Add user ID for ownership check
-        user: {
-          name: currentUser?.nickname || currentUser?.name || 'User name',
-          profileImage: currentUser?.profileImage || null,
-        },
-        timeAgo: '방금 전',
-        page: page || null,
-        content: reviewContent,
-        images: selectedImages.length > 0 ? selectedImages : undefined,
-        likes: 0,
-        comments: 0,
-        isSpoiler,
-        isCompleted: isCompleted,
-        bookIsbn: isbn,
-        book: {
-          title: displayTitle,
-          author: mainAuthors.length > 0 ? mainAuthors.map(a => a.name).join(', ') : author.split(',')[0].trim(),
-          cover: displayCover,
-        },
-        createdAt: new Date().toISOString(),
-      };
-
-      // Call parent callback to add review
-      if (onAddReview) {
-        onAddReview(newReview);
-      }
-
-      // Notify parent about review submission for reading progress (only if page is provided)
-      if (onUpdateReading && page) {
-        onUpdateReading('addReview', {
-          currentPage: page,
-          totalPages,
-          isCompleted: false,
-        });
-      }
-
-      // Close modal
-      handleCloseReview();
-
-      // Switch to reviews tab and scroll to top
-      setActiveTab('reviews');
-      setTimeout(() => {
-        scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-      }, 100);
-
-      showToast('독후감이 등록되었습니다.');
+    } catch (e) {
+      const msg = isEditMode ? '수정에 실패했어요. 다시 시도해주세요.' : '저장에 실패했어요. 다시 시도해주세요.';
+      setToastMessage(msg);
+      setToastVisible(true);
+      setTimeout(() => setToastVisible(false), 3000);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -831,10 +803,12 @@ export default function BookDetail({
   };
 
   // Handle review deletion
-  const handleDeleteReview = (reviewId) => {
-    // Call parent callback to remove review from global state
-    if (onDeleteReview) {
-      onDeleteReview(reviewId);
+  const handleDeleteReview = async (reviewId) => {
+    try {
+      if (onDeleteReview) await onDeleteReview(reviewId);
+      showToast('독후감이 삭제되었어요.');
+    } catch (e) {
+      showToast('삭제에 실패했어요. 다시 시도해주세요.');
     }
   };
 
@@ -1154,9 +1128,9 @@ export default function BookDetail({
                     isSpoiler={item.isSpoiler}
                     isCompleted={item.isCompleted}
                     isMyReview={item.userId === currentUser?.id}
-                    onRevealSpoiler={() => {
-                      console.log('Reveal spoiler for item', item.id);
-                    }}
+                    currentUser={currentUser}
+                    onToggleLike={onToggleLike}
+                    onRevealSpoiler={() => {}}
                     onEdit={handleEditReview}
                     onDelete={handleDeleteReview}
                   />

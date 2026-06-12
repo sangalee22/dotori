@@ -276,6 +276,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
   ).current;
 
   const openCardMenu = () => {
+    if (selectedVariant !== 'style1' && selectedVariant !== 'style2') return;
     setIsCardMenuVisible(true);
     Animated.spring(cardMenuTranslateY, { toValue: 0, useNativeDriver: true, tension: 50, friction: 10 }).start();
   };
@@ -464,9 +465,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
       if (Platform.OS !== 'web') {
         try {
           imageUri = await captureCard(cardCaptureRef);
-        } catch (e) {
-          console.warn('captureCard 실패 (무시):', e);
-        }
+        } catch (e) { }
       }
       setIsResultModalVisible(false);
       onWriteReview?.({
@@ -475,7 +474,6 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
         imageUri,
       });
     } catch (e) {
-      console.error('handleWriteReview 에러:', e);
       showResultToast('오류가 발생했어요.');
     }
   };
@@ -876,7 +874,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
             descriptionStyle={{ color: Colors.primary500 }}
             primaryButtonText="확인"
             hideSecondaryButton={true}
-            onPrimaryPress={() => {
+            onPrimaryPress={async () => {
               const endPage = parseInt(endPageInput) || 0;
               setIsEndPageModalVisible(false);
               AsyncStorage.removeItem('timerPendingState').catch(() => {});
@@ -887,7 +885,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
                 });
               }
               if (onSaveReadingRecord && selectedBook) {
-                onSaveReadingRecord({
+                const ok = await onSaveReadingRecord({
                   date: new Date().toISOString().split('T')[0],
                   isbn: selectedBook.isbn,
                   title: selectedBook.title,
@@ -899,6 +897,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
                   totalPages: selectedBookTotalPages,
                   source: 'timer',
                 });
+                if (ok === false) showResultToast('기록 저장에 실패했어요. 나중에 다시 시도해주세요.');
               }
             }}
             primaryButtonDisabled={
@@ -1103,12 +1102,12 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
               setAddRecordEndPage={setAddRecordEndPage}
               readingRecords={readingRecords}
               insets={insets}
-              onSave={(startPage, endPage, duration) => {
+              onSave={async (startPage, endPage, duration) => {
                 if (isSavingRef.current) return;
                 isSavingRef.current = true;
                 const totalPages = addRecordBook?.totalPages ?? 0;
                 const isCompleted = totalPages > 0 && endPage >= totalPages;
-                onSaveReadingRecord?.({
+                const ok = await onSaveReadingRecord?.({
                   isbn: addRecordBook?.isbn,
                   title: addRecordBook?.title,
                   cover: addRecordBook?.coverImage,
@@ -1119,6 +1118,11 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
                   date: addRecordDate || new Date().toISOString().split('T')[0],
                   createdAt: addRecordDate ? new Date(addRecordDate).toISOString() : new Date().toISOString(),
                 });
+                if (ok === false) {
+                  showResultToast('기록 저장에 실패했어요. 나중에 다시 시도해주세요.');
+                  isSavingRef.current = false;
+                  return;
+                }
                 onUpdateReading?.(addRecordBook, isCompleted ? 'complete' : 'updatePage', {
                   currentPage: endPage,
                   totalPages,

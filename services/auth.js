@@ -28,7 +28,6 @@ async function exchangeKakaoCode(code, redirectUri) {
     }).toString(),
   });
   const tokenData = await tokenRes.json();
-  console.log('Kakao token response:', JSON.stringify(tokenData));
   if (!tokenData.access_token) throw new Error(`토큰 발급 실패: ${tokenData.error_description || tokenData.error || JSON.stringify(tokenData)}`);
 
   const userRes = await fetch('https://kapi.kakao.com/v2/user/me', {
@@ -296,6 +295,7 @@ export async function withdrawUser(userId, provider, reasonData) {
 
 export async function logout() {
   await AsyncStorage.removeItem('currentUser');
+  await AsyncStorage.removeItem('kakao_access_token');
   if (Platform.OS === 'web' && window.Kakao?.isInitialized()) {
     window.Kakao.Auth.logout(() => {});
   } else if (Platform.OS !== 'web') {

@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, View, ScrollView, Text, Image, Pressable, Animated, Dimensions, Modal } from 'react-native';
+import { StyleSheet, View, ScrollView, Text, Image, Pressable, Animated, Dimensions, Modal, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Spacing, Typography, BorderRadius } from '../styles';
 import EmptyState from '../components/EmptyState';
@@ -15,7 +15,7 @@ import PopupHeader from '../components/PopupHeader';
 import { useToast } from '../contexts/ToastContext';
 
 const HEADER_HEIGHT = 104;
-const MAIN_TAB_HEIGHT = 44;
+const MAIN_TAB_HEIGHT = 48;
 const SUB_TAB_HEIGHT = 49;
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const SCREEN_HEIGHT = Dimensions.get('window').height;
@@ -242,10 +242,11 @@ const cardStyles = StyleSheet.create({
   },
 });
 
-export default function DotoriRoomScreen({ readingBooks = [], reviews = [], readingRecords = [], wantToReadBooks = [], currentUser, activeTab = 'calendar', onBookPress, onReviewPress, onScroll, logoHeightAnim, onDeleteReadingRecord, onEditReadingRecord, onCompleteBook, onAddRecord }) {
+export default function DotoriRoomScreen({ readingBooks = [], reviews = [], readingRecords = [], wantToReadBooks = [], currentUser, onBookPress, onReviewPress, onDeleteReadingRecord, onEditReadingRecord, onCompleteBook, onAddRecord }) {
   const insets = useSafeAreaInsets();
   const { showToast } = useToast();
   const today = new Date();
+  const [activeTab, setActiveTab] = React.useState('calendar');
   const [calYear, setCalYear] = React.useState(today.getFullYear());
   const [calMonth, setCalMonth] = React.useState(today.getMonth() + 1);
   const [bookshelfSubTab, setBookshelfSubTab] = React.useState('reading');
@@ -310,20 +311,27 @@ export default function DotoriRoomScreen({ readingBooks = [], reviews = [], read
     { id: 'wantToRead', label: `읽고싶은 책 ${wantToReadBooks.length}` },
   ];
 
-  const subTabTop = logoHeightAnim
-    ? Animated.add(logoHeightAnim, insets.top + MAIN_TAB_HEIGHT)
-    : insets.top + HEADER_HEIGHT;
+  const subTabTop = insets.top + MAIN_TAB_HEIGHT;
 
   const contentPaddingTop = activeTab === 'bookshelf'
-    ? insets.top + HEADER_HEIGHT + SUB_TAB_HEIGHT
-    : insets.top + HEADER_HEIGHT;
+    ? insets.top + MAIN_TAB_HEIGHT + SUB_TAB_HEIGHT
+    : insets.top + MAIN_TAB_HEIGHT;
 
   return (
     <View style={styles.container}>
+      {/* 캘린더 / 책장 탭 헤더 */}
+      <View style={[styles.mainTabHeader, { paddingTop: insets.top }]}>
+        <TouchableOpacity onPress={() => setActiveTab('calendar')} style={styles.mainTab} activeOpacity={0.7}>
+          <Text style={activeTab === 'calendar' ? styles.mainTabTextActive : styles.mainTabTextInactive}>캘린더</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => setActiveTab('bookshelf')} style={styles.mainTab} activeOpacity={0.7}>
+          <Text style={activeTab === 'bookshelf' ? styles.mainTabTextActive : styles.mainTabTextInactive}>책장</Text>
+        </TouchableOpacity>
+      </View>
+
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[styles.content, { paddingTop: contentPaddingTop }]}
-        onScroll={onScroll}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
       >
@@ -379,7 +387,11 @@ export default function DotoriRoomScreen({ readingBooks = [], reviews = [], read
                             const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
                             return dateStr > todayStr;
                           })()}
-                          cover={recordsByDay[day]?.[0]?.cover ?? null}
+                          cover={(() => {
+                            const r = recordsByDay[day]?.[0];
+                            const b = readingBooks.find(b => String(b.isbn) === String(r?.isbn));
+                            return b?.coverImage ?? b?.cover ?? r?.cover ?? null;
+                          })()}
                           recordCount={recordsByDay[day]?.length ?? 0}
                           onPress={() => {
                             const dateStr = `${calYear}-${String(calMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
@@ -495,7 +507,7 @@ export default function DotoriRoomScreen({ readingBooks = [], reviews = [], read
       </ScrollView>
 
       {activeTab === 'bookshelf' && (
-        <Animated.View style={[styles.subTabFixed, { top: subTabTop }]}>
+        <View style={[styles.subTabFixed, { top: subTabTop }]}>
           <View style={styles.subTabRow}>
             {bookshelfSubTabs.map(tab => (
               <SubTab
@@ -508,7 +520,7 @@ export default function DotoriRoomScreen({ readingBooks = [], reviews = [], read
             ))}
           </View>
           <View style={styles.subTabDivider} />
-        </Animated.View>
+        </View>
       )}
 
       <CalendarRecordBottomSheet
@@ -594,6 +606,30 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.white },
   scrollView: { flex: 1 },
   content: { paddingBottom: 100 },
+
+  mainTabHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    backgroundColor: Colors.white,
+    flexDirection: 'row',
+    paddingHorizontal: 8,
+  },
+  mainTab: {
+    paddingVertical: Spacing.lg,
+    paddingHorizontal: Spacing.sm,
+  },
+  mainTabTextActive: {
+    ...Typography.headline3Bold,
+    fontWeight: '900',
+    color: Colors.gray900,
+  },
+  mainTabTextInactive: {
+    ...Typography.headline3Medium,
+    color: Colors.gray500,
+  },
 
   statsCard: {
     marginHorizontal: Spacing.md,

@@ -96,49 +96,28 @@ const RoomFeed = ({
   const isTabSticky = scrollY > (BOOK_DETAIL_HEIGHT - HEADER_HEIGHT);
   const headerOpacity = Math.min(scrollY / 100, 1);
   React.useEffect(() => {
+    if (!bookTitle) return;
     const fetchBookData = async () => {
       try {
-        console.log('🔍 책 검색 중: 혼모노 성해나');
-        const results = await searchBooks('혼모노 성해나', 'Keyword', 5);
-
-        if (results && results.length > 0) {
-          // Find the most relevant result
-          const book = results.find(b =>
-            b.title.includes('혼모노') && b.author.includes('성해나')
-          ) || results[0];
-
-          console.log('✅ 책 검색 완료:', book.title, book.author);
-
-          // Fetch detailed info to get page count
-          if (book.isbn) {
-            console.log('📖 책 상세 정보 조회 중...');
-            const detailData = await fetchBookDetail(book.isbn);
-
-            if (detailData) {
-              // Merge search result with detail data
-              const completeBookData = {
-                ...book,
-                totalPages: detailData.subInfo?.itemPage || null,
-                publisher: detailData.publisher || book.publisher,
-                description: detailData.description || book.description,
-              };
-
-              console.log('✅ 상세 정보 로드 완료. 총 페이지:', completeBookData.totalPages);
-              setBookDetailData(completeBookData);
-            } else {
-              setBookDetailData(book);
-            }
-          } else {
-            setBookDetailData(book);
-          }
-        }
-      } catch (error) {
-        console.error('❌ 책 검색 실패:', error);
-      }
+        const query = author ? `${bookTitle} ${author}` : bookTitle;
+        const results = await searchBooks(query, 'Keyword', 5);
+        if (!results?.length) return;
+        const norm = (s) => (s || '').toLowerCase();
+        const book = results.find(b =>
+          norm(b.title).includes(norm(bookTitle))
+        ) || results[0];
+        if (!book) return;
+        const detailData = book.isbn ? await fetchBookDetail(book.isbn) : null;
+        setBookDetailData({
+          ...book,
+          totalPages: detailData?.subInfo?.itemPage || null,
+          publisher: detailData?.publisher || book.publisher,
+          description: detailData?.description || book.description,
+        });
+      } catch {}
     };
-
     fetchBookData();
-  }, []);
+  }, [bookTitle, author]);
 
   const handleOpenPageEdit = () => {
     setPageInput(String(currentMyPage));
@@ -223,7 +202,6 @@ const RoomFeed = ({
     setCurrentMyPage(newPage);
     setIsCompleted(newPage === displayTotalPages);
     // TODO: Call API to update page
-    console.log('Update page to:', newPage);
     handleClosePageEdit();
   };
 
@@ -233,7 +211,6 @@ const RoomFeed = ({
     setPageInput(String(displayTotalPages));
     setIsCompleted(true);
     // TODO: Call API to mark as completed
-    console.log('Mark as completed');
     handleClosePageEdit();
   };
 
@@ -287,7 +264,6 @@ const RoomFeed = ({
     }
 
     // TODO: Call API to submit review
-    console.log('Submit review:', { page, content: reviewContent, isSpoiler });
     setToastMessage('후기가 등록되었습니다');
     setToastVisible(true);
     handleCloseReview();
@@ -565,7 +541,6 @@ const RoomFeed = ({
                   isSpoiler={item.isSpoiler}
                   onRevealSpoiler={() => {
                     // TODO: Handle reveal spoiler
-                    console.log('Reveal spoiler for item', item.id);
                   }}
                 />
               ))}
@@ -594,7 +569,6 @@ const RoomFeed = ({
                             setToastMessage('팔로우 했습니다.');
                             setToastVisible(true);
                             // TODO: Call API to follow user
-                            console.log('Follow user:', participant.id);
                           }}
                         >
                           <PlusFillIcon width={20} height={20} color={Colors.gray900} />
@@ -815,7 +789,6 @@ const RoomFeed = ({
                     size={40}
                     onPress={() => {
                       // TODO: Open image picker
-                      console.log('Open image picker');
                     }}
                   >
                     <ImageIcon width={24} height={24} />

@@ -211,7 +211,6 @@ export async function fetchBestsellers(category = '종합', maxResults = 10) {
       ? category
       : (CATEGORY_MAP[category] || 0);
 
-    console.log(`📚 베스트셀러 조회 - 카테고리: ${category} (ID: ${categoryId})`);
 
     const params = new URLSearchParams({
       ttbkey: ALADIN_API_KEY,
@@ -238,7 +237,6 @@ export async function fetchBestsellers(category = '종합', maxResults = 10) {
 
     // API 응답 데이터를 앱에서 사용하는 형식으로 변환
     if (data && data.item && Array.isArray(data.item)) {
-      console.log(`✅ 베스트셀러 ${data.item.length}권 조회 성공`);
 
       // 제외할 카테고리 (검색과 동일)
       const filteredBooks = data.item
@@ -260,16 +258,13 @@ export async function fetchBestsellers(category = '종합', maxResults = 10) {
 
       // 첫 번째 책 정보 로그
       if (filteredBooks.length > 0) {
-        console.log(`📖 1위: ${filteredBooks[0].title} - ${filteredBooks[0].author}`);
       }
 
       return filteredBooks;
     }
 
-    console.warn('⚠️ API 응답에 데이터가 없습니다:', data);
     return [];
   } catch (error) {
-    console.error('알라딘 API 호출 오류:', error);
     throw error;
   }
 }
@@ -316,7 +311,6 @@ export async function fetchBestsellersByPeriod(period = 'weekly', category = '�
     }
     return [];
   } catch (error) {
-    console.error('기간별 베스트셀러 조회 오류:', error);
     return [];
   }
 }
@@ -357,7 +351,6 @@ export async function fetchBookDetail(itemId) {
 
     return null;
   } catch (error) {
-    console.error('알라딘 도서 상세 조회 오류:', error);
     throw error;
   }
 }
@@ -375,7 +368,6 @@ export async function fetchNewBooks(category = '종합', maxResults = 10) {
       ? category
       : (CATEGORY_MAP[category] || 0);
 
-    console.log(`📚 신간 조회 - 카테고리: ${category} (ID: ${categoryId})`);
 
     const params = new URLSearchParams({
       ttbkey: ALADIN_API_KEY,
@@ -401,7 +393,6 @@ export async function fetchNewBooks(category = '종합', maxResults = 10) {
     const data = await response.json();
 
     if (data && data.item && Array.isArray(data.item)) {
-      console.log(`✅ 신간 ${data.item.length}권 조회 성공`);
 
       // 신간은 소설/시/희곡/에세이만 포함
       const includedCategories = ['소설', '시', '희곡', '에세이'];
@@ -439,16 +430,13 @@ export async function fetchNewBooks(category = '종합', maxResults = 10) {
         }));
 
       if (filteredBooks.length > 0) {
-        console.log(`📖 신간 1위: ${filteredBooks[0].title} - ${filteredBooks[0].author}`);
       }
 
       return filteredBooks;
     }
 
-    console.warn('⚠️ API 응답에 데이터가 없습니다:', data);
     return [];
   } catch (error) {
-    console.error('알라딘 신간 조회 오류:', error);
     throw error;
   }
 }
@@ -508,7 +496,6 @@ export async function searchBooks(query, queryType = 'Keyword', maxResults = 20)
 
     return [];
   } catch (error) {
-    console.error('알라딘 도서 검색 오류:', error);
     throw error;
   }
 }

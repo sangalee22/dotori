@@ -56,12 +56,9 @@ export default function SearchScreen({
       setHasSearched(true);
 
       try {
-        console.log(`🔍 검색 시작: "${searchText}"`);
         const results = await searchBooks(searchText, 'Keyword', 20);
-        console.log(`✅ 검색 완료: ${results.length}건`);
         setSearchResults(results);
       } catch (error) {
-        console.error('❌ 검색 실패:', error);
         setSearchResults([]);
       } finally {
         setIsSearching(false);
@@ -87,12 +84,9 @@ export default function SearchScreen({
     setHasSearched(true);
 
     try {
-      console.log(`🔍 검색 시작: "${term}"`);
       const results = await searchBooks(term, 'Keyword', 20);
-      console.log(`✅ 검색 완료: ${results.length}건`);
       setSearchResults(results);
     } catch (error) {
-      console.error('❌ 검색 실패:', error);
       setSearchResults([]);
     } finally {
       setIsSearching(false);

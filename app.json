@@ -28,6 +28,7 @@
         "ITSAppUsesNonExemptEncryption": false,
         "GADApplicationIdentifier": "ca-app-pub-9552392941451192~4380966810",
         "NSPhotoLibraryUsageDescription": "도토리룸에서 독후감에 사진을 추가하기 위해 사진첩 접근 권한이 필요합니다.",
+        "NSCameraUsageDescription": "도토리룸에서 독후감에 사진을 추가하기 위해 카메라 접근 권한이 필요합니다.",
         "LSApplicationQueriesSchemes": [
           "kakaokompassauth",
           "storekit",

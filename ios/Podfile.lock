@@ -250,6 +250,8 @@ PODS:
     - ReactCommon/turbomodule/core
     - SocketRocket
     - Yoga
+  - ExpoAppleAuthentication (8.0.8):
+    - ExpoModulesCore
   - ExpoAsset (12.0.13):
     - ExpoModulesCore
   - ExpoBlur (15.0.8):
@@ -308,6 +310,9 @@ PODS:
   - FBLazyVector (0.81.5)
   - fmt (11.0.2)
   - glog (0.3.5)
+  - Google-Mobile-Ads-SDK (13.1.0):
+    - GoogleUserMessagingPlatform (>= 1.1)
+  - GoogleUserMessagingPlatform (3.1.0)
   - hermes-engine (0.81.5):
     - hermes-engine/Pre-built (= 0.81.5)
   - hermes-engine/Pre-built (0.81.5)
@@ -2606,6 +2611,36 @@ PODS:
     - React-Core
   - RNDateTimePicker (8.4.4):
     - React-Core
+  - RNGoogleMobileAds (16.3.3):
+    - boost
+    - DoubleConversion
+    - fast_float
+    - fmt
+    - glog
+    - Google-Mobile-Ads-SDK (= 13.1.0)
+    - GoogleUserMessagingPlatform (= 3.1.0)
+    - hermes-engine
+    - RCT-Folly
+    - RCT-Folly/Fabric
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - SocketRocket
+    - Yoga
   - RNSVG (15.12.1):
     - React-Core
   - SocketRocket (0.7.1)
@@ -2624,6 +2659,7 @@ DEPENDENCIES:
   - expo-dev-launcher (from `../node_modules/expo-dev-launcher`)
   - expo-dev-menu (from `../node_modules/expo-dev-menu`)
   - expo-dev-menu-interface (from `../node_modules/expo-dev-menu-interface/ios`)
+  - ExpoAppleAuthentication (from `../node_modules/expo-apple-authentication/ios`)
   - ExpoAsset (from `../node_modules/expo-asset/ios`)
   - ExpoBlur (from `../node_modules/expo-blur/ios`)
   - ExpoCrypto (from `../node_modules/expo-crypto/ios`)
@@ -2711,6 +2747,7 @@ DEPENDENCIES:
   - ReactCommon/turbomodule/core (from `../node_modules/react-native/ReactCommon`)
   - "RNCAsyncStorage (from `../node_modules/@react-native-async-storage/async-storage`)"
   - "RNDateTimePicker (from `../node_modules/@react-native-community/datetimepicker`)"
+  - RNGoogleMobileAds (from `../node_modules/react-native-google-mobile-ads`)
   - RNSVG (from `../node_modules/react-native-svg`)
   - SocketRocket (~> 0.7.1)
   - Yoga (from `../node_modules/react-native/ReactCommon/yoga`)
@@ -2718,6 +2755,8 @@ DEPENDENCIES:
 SPEC REPOS:
   trunk:
     - Alamofire
+    - Google-Mobile-Ads-SDK
+    - GoogleUserMessagingPlatform
     - KakaoSDKAuth
     - KakaoSDKCommon
     - KakaoSDKUser
@@ -2748,6 +2787,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/expo-dev-menu"
   expo-dev-menu-interface:
     :path: "../node_modules/expo-dev-menu-interface/ios"
+  ExpoAppleAuthentication:
+    :path: "../node_modules/expo-apple-authentication/ios"
   ExpoAsset:
     :path: "../node_modules/expo-asset/ios"
   ExpoBlur:
@@ -2921,6 +2962,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/@react-native-async-storage/async-storage"
   RNDateTimePicker:
     :path: "../node_modules/@react-native-community/datetimepicker"
+  RNGoogleMobileAds:
+    :path: "../node_modules/react-native-google-mobile-ads"
   RNSVG:
     :path: "../node_modules/react-native-svg"
   Yoga:
@@ -2940,6 +2983,7 @@ SPEC CHECKSUMS:
   expo-dev-launcher: e36ca26ba00c214e8c7c7091216186a01f3dc52c
   expo-dev-menu: d0d7146a3261c267c693a059197383154575a56a
   expo-dev-menu-interface: 600df12ea01efecdd822daaf13cc0ac091775533
+  ExpoAppleAuthentication: 9413ae9a5e631a424cc04c1b13b0694dbab7d594
   ExpoAsset: 9e5a7c9c0a9fb83ad5b2bb365141f2bd7f289b66
   ExpoBlur: b90747a3f22a8b6ceffd9cb0dc41a4184efdc656
   ExpoCrypto: e2a2c4c748aac8485e5675f027b7901f511d43ff
@@ -2957,6 +3001,8 @@ SPEC CHECKSUMS:
   FBLazyVector: 5beb8028d5a2e75dd9634917f23e23d3a061d2aa
   fmt: a40bb5bd0294ea969aaaba240a927bd33d878cdd
   glog: 5683914934d5b6e4240e497e0f4a3b42d1854183
+  Google-Mobile-Ads-SDK: 8429bef6ee1a4e322b0a5571b64217ed8317a3d5
+  GoogleUserMessagingPlatform: befe603da6501006420c206222acd449bba45a9c
   hermes-engine: 9f4dfe93326146a1c99eb535b1cb0b857a3cd172
   kakao-login: c7b882cd279ca11f5b3abd15d0e0fcb41a427108
   KakaoSDKAuth: 569b377eda622d93d4575240b8031cd658163eef
@@ -3029,6 +3075,7 @@ SPEC CHECKSUMS:
   ReactCommon: 5f0e5c09a64a2717215dd84380e1a747810406f2
   RNCAsyncStorage: b44e8a4e798c3e1f56bffccd0f591f674fb9198f
   RNDateTimePicker: 7d93eacf4bdf56350e4b7efd5cfc47639185e10c
+  RNGoogleMobileAds: eb2e24e85aa338845776d098bc6537282734362b
   RNSVG: d3f55b1e5f680744764389119f1cb7512058672b
   SocketRocket: d4aabe649be1e368d1318fdf28a022d714d65748
   Yoga: 728df40394d49f3f471688747cf558158b3a3bd1

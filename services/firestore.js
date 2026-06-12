@@ -95,15 +95,30 @@ export async function getReadingRecords(userId) {
     orderBy('createdAt', 'desc')
   );
   const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  return snap.docs.map(d => {
+    const data = d.data();
+    return {
+      id: d.id,
+      ...data,
+      createdAt: data.createdAt?.toDate?.() ? data.createdAt.toDate().toISOString() : data.createdAt,
+    };
+  });
 }
 
 export async function addReadingRecord(userId, data) {
   return await addDoc(collection(db, 'readingRecords'), {
     userId,
     ...data,
-    createdAt: serverTimestamp(),
+    // createdAt은 로컬 ISO 문자열 유지 (serverTimestamp로 덮지 않음)
   });
+}
+
+export async function deleteReadingRecord(id) {
+  await deleteDoc(doc(db, 'readingRecords', id));
+}
+
+export async function updateReadingRecord(id, data) {
+  await updateDoc(doc(db, 'readingRecords', id), data);
 }
 
 // ─── Reviews ─────────────────────────────────────────────────────────────────
@@ -122,7 +137,11 @@ export async function updateReviewsBookInfo(isbn, bookData) {
   await Promise.all(
     snap.docs
       .filter(d => !d.data().bookTitle)
-      .map(d => updateDoc(d.ref, { book: bookData }))
+      .map(d => updateDoc(d.ref, {
+        bookTitle: bookData.title || null,
+        bookAuthor: bookData.author || null,
+        bookCover: bookData.coverImage || bookData.cover || null,
+      }))
   );
 }
 
