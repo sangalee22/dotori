@@ -59,7 +59,7 @@ export default function App() {
     'Paperlogy-Bold':       require('./assets/fonts/Paperlogy-7Bold.ttf'),
     'Paperlogy-ExtraBold':  require('./assets/fonts/Paperlogy-8ExtraBold.ttf'),
     'Paperlogy-Black':      require('./assets/fonts/Paperlogy-9Black.ttf'),
-    'LeeSeoyun':            require('./assets/fonts/이서윤체.ttf'),
+    'LeeSeoyun':            require('./assets/fonts/LeeSeoyun.ttf'),
     'OkMallangB':           require('./assets/fonts/OkMallangB.ttf'),
   });
 
