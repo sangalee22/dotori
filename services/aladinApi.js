@@ -8,6 +8,8 @@ import { Platform } from 'react-native';
 const ALADIN_API_KEY = 'ttbsang_a0_01255001';
 const BASE_URL = 'http://www.aladin.co.kr/ttb/api';
 
+const toHttpsCover = (url) => url?.replace(/^http:\/\//, 'https://') || null;
+
 // 웹 환경에서는 CORS 우회를 위해 로컬 프록시 사용
 const USE_PROXY = Platform.OS === 'web';
 const PROXY_URL = 'http://localhost:8090/';
@@ -245,7 +247,7 @@ export async function fetchBestsellers(category = '종합', maxResults = 10) {
           rank: index + 1,
           title: book.title,
           author: cleanAuthorName(book.author), // 저자명 정리 (목록용)
-          coverImage: book.cover,
+          coverImage: toHttpsCover(book.cover),
           isbn: book.isbn13 || book.isbn,
           publisher: book.publisher,
           pubDate: book.pubDate,
@@ -418,7 +420,7 @@ export async function fetchNewBooks(category = '종합', maxResults = 10) {
           rank: index + 1,
           title: book.title,
           author: cleanAuthorName(book.author),
-          coverImage: book.cover,
+          coverImage: toHttpsCover(book.cover),
           isbn: book.isbn13 || book.isbn,
           publisher: book.publisher,
           pubDate: book.pubDate,
@@ -481,7 +483,7 @@ export async function searchBooks(query, queryType = 'Keyword', maxResults = 20)
         .map((book) => ({
           title: book.title,
           author: cleanAuthorName(book.author), // 저자명 정리 (목록용)
-          coverImage: book.cover,
+          coverImage: toHttpsCover(book.cover),
           isbn: book.isbn13 || book.isbn,
           publisher: book.publisher,
           pubDate: book.pubDate,

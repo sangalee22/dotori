@@ -210,12 +210,14 @@ export default function App() {
         if (stored) {
           const parsed = JSON.parse(stored);
           // isbn 타입 불일치로 생긴 중복 제거 - 가장 currentPage 높은 항목 유지
+          const toHttps = (url) => url?.replace(/^http:\/\//, 'https://') || null;
           const seen = new Map();
           for (const book of parsed) {
             const key = String(book.isbn);
             const existing = seen.get(key);
+            const normalized = { ...book, coverImage: toHttps(book.coverImage) };
             if (!existing || (book.currentPage ?? 0) > (existing.currentPage ?? 0)) {
-              seen.set(key, book);
+              seen.set(key, normalized);
             }
           }
           setReadingBooks([...seen.values()]);
@@ -426,7 +428,7 @@ export default function App() {
     const keys = await AsyncStorage.getAllKeys().catch(() => []);
     const dynamicKeys = keys.filter(k => k.startsWith('feedLike_') || k.startsWith('feedRevealed_'));
     await AsyncStorage.multiRemove([
-      'readingBooks', 'wantToReadBooks', 'readingRecords', 'reviews',
+      'readingBooks', 'wantToReadBooks', 'reviews',
       'bookCache', 'timerState', 'timerPendingState',
       ...dynamicKeys,
     ]).catch(() => {});
@@ -535,35 +537,30 @@ export default function App() {
       const { id, title: _t, cover: _c, totalPages: _tp, ...fields } = updated;
       updateReadingRecord(id, fields).catch(() => {});
     }
+
+    let latestRecord = null;
     setReadingRecords(prev => {
       const next = prev.map(r =>
-        r.isbn === updated.isbn && r.createdAt === updated.createdAt ? updated : r
+        String(r.isbn) === String(updated.isbn) && r.createdAt === updated.createdAt ? updated : r
       );
       AsyncStorage.setItem('readingRecords', JSON.stringify(next)).catch(() => {});
-
-      // 해당 책의 가장 최신 기록(date 기준, 동일하면 createdAt 기준)의 endPage를 currentPage에 반영
       const bookRecords = next.filter(r => String(r.isbn) === String(updated.isbn));
-      const latestRecord = [...bookRecords].sort((a, b) => {
+      latestRecord = [...bookRecords].sort((a, b) => {
         const da = a.date ?? a.createdAt ?? '';
         const db = b.date ?? b.createdAt ?? '';
         if (da !== db) return db.localeCompare(da);
         return (b.createdAt ?? '').localeCompare(a.createdAt ?? '');
-      })[0];
-
-      if (latestRecord) {
-        setReadingBooks(prevBooks => {
-          const nextBooks = prevBooks.map(book =>
-            String(book.isbn) === String(updated.isbn)
-              ? { ...book, currentPage: latestRecord.endPage ?? book.currentPage }
-              : book
-          );
-          AsyncStorage.setItem('readingBooks', JSON.stringify(nextBooks)).catch(() => {});
-          return nextBooks;
-        });
-      }
-
+      })[0] ?? null;
       return next;
     });
+
+    if (latestRecord) {
+      setReadingBooks(prevBooks => prevBooks.map(book =>
+        String(book.isbn) === String(updated.isbn)
+          ? { ...book, currentPage: latestRecord.endPage ?? book.currentPage }
+          : book
+      ));
+    }
   }, []);
 
   // Save reviews to AsyncStorage whenever it changes
@@ -581,80 +578,70 @@ export default function App() {
 
   // Add or update a reading book
   const updateReadingBook = (book, updateType, data) => {
-    let syncBook = null;
+    const now = new Date().toISOString();
+    const existingBook = readingBooks.find(b => String(b.isbn) === String(book.isbn)) ?? null;
+    const existingIndex = readingBooks.findIndex(b => String(b.isbn) === String(book.isbn));
+    const isNewBook = existingIndex < 0;
 
-    setReadingBooks((prevBooks) => {
-      const existingIndex = prevBooks.findIndex(b => String(b.isbn) === String(book.isbn));
-      const now = new Date().toISOString();
-      const isNewBook = existingIndex < 0;
+    const todayStr = new Date().toISOString().split('T')[0];
+    const prevDates = existingBook?.readingDates || [];
+    const readingDates = prevDates.includes(todayStr) ? prevDates : [...prevDates, todayStr];
+    const resolvedTotalPages = data?.totalPages || existingBook?.totalPages || book?.totalPages || 0;
 
-      const existingBook = existingIndex >= 0 ? prevBooks[existingIndex] : null;
-      const todayStr = new Date().toISOString().split('T')[0];
-      const prevDates = existingBook?.readingDates || [];
-      const readingDates = prevDates.includes(todayStr) ? prevDates : [...prevDates, todayStr];
+    const updatedBook = {
+      ...(existingBook ?? book),
+      ...book,
+      lastActivityAt: now,
+      isCompleted: data?.isCompleted ?? existingBook?.isCompleted ?? false,
+      currentPage: data?.currentPage ?? existingBook?.currentPage ?? 0,
+      totalPages: resolvedTotalPages,
+      readingDates,
+    };
 
-      const resolvedTotalPages = data?.totalPages || existingBook?.totalPages || book?.totalPages || 0;
+    if (isNewBook) updatedBook.startedAt = now;
 
-      const updatedBook = {
-        ...(existingBook ?? book),
-        ...book,
-        lastActivityAt: now,
-        isCompleted: data?.isCompleted ?? existingBook?.isCompleted ?? false,
-        currentPage: data?.currentPage ?? existingBook?.currentPage ?? 0,
-        totalPages: resolvedTotalPages,
-        readingDates,
-      };
-
-      if (isNewBook) {
-        updatedBook.startedAt = now;
-      }
-
-      if (updateType === 'startReading') {
-        updatedBook.startedAt = now;
-        updatedBook.isCompleted = false;
-        updatedBook.completedAt = null;
-        updatedBook.currentPage = 0;
-      } else if (updateType === 'updatePage') {
-        updatedBook.lastPageUpdateAt = now;
-        updatedBook.currentPage = data.currentPage;
-        if (data.totalPages > 0 && data.currentPage >= data.totalPages) {
-          updatedBook.isCompleted = true;
-          updatedBook.completedAt = now;
-        }
-      } else if (updateType === 'addReview') {
-        updatedBook.lastReviewAt = now;
-      } else if (updateType === 'complete') {
+    if (updateType === 'startReading') {
+      updatedBook.startedAt = now;
+      updatedBook.isCompleted = false;
+      updatedBook.completedAt = null;
+      updatedBook.currentPage = 0;
+    } else if (updateType === 'updatePage') {
+      updatedBook.lastPageUpdateAt = now;
+      updatedBook.currentPage = data.currentPage;
+      if (data.totalPages > 0 && data.currentPage >= data.totalPages) {
         updatedBook.isCompleted = true;
         updatedBook.completedAt = now;
       }
+    } else if (updateType === 'addReview') {
+      updatedBook.lastReviewAt = now;
+    } else if (updateType === 'complete') {
+      updatedBook.isCompleted = true;
+      updatedBook.completedAt = now;
+      updatedBook.currentPage = updatedBook.totalPages;
+    }
 
-      syncBook = updatedBook;
-
-      const filtered = prevBooks.filter((b, i) =>
-        String(b.isbn) !== String(book.isbn) || i === existingIndex
-      );
-      if (existingIndex >= 0) {
-        return filtered.map(b =>
-          String(b.isbn) === String(book.isbn) ? updatedBook : b
-        );
+    setReadingBooks(prevBooks => {
+      const idx = prevBooks.findIndex(b => String(b.isbn) === String(book.isbn));
+      if (idx >= 0) {
+        return prevBooks.map((b, i) => i === idx ? updatedBook : b);
       } else {
-        return [updatedBook, ...filtered];
+        return [updatedBook, ...prevBooks.filter(b => String(b.isbn) !== String(book.isbn))];
       }
     });
 
-    if (currentUser?.id && syncBook) {
-      const status = syncBook.isCompleted ? 'completed' : 'reading';
+    if (currentUser?.id) {
+      const status = updatedBook.isCompleted ? 'completed' : 'reading';
       setUserBook(currentUser.id, String(book.isbn), {
-        title: syncBook.title || book.title,
-        author: syncBook.author || book.author,
-        coverImage: syncBook.coverImage || book.coverImage || null,
+        title: updatedBook.title || book.title,
+        author: updatedBook.author || book.author,
+        coverImage: updatedBook.coverImage || book.coverImage || null,
         status,
-        currentPage: syncBook.currentPage ?? 0,
-        totalPages: syncBook.totalPages ?? 0,
-        isCompleted: syncBook.isCompleted ?? false,
-        startedAt: syncBook.startedAt ?? null,
-        completedAt: syncBook.completedAt ?? null,
-        lastActivityAt: syncBook.lastActivityAt ?? null,
+        currentPage: updatedBook.currentPage ?? 0,
+        totalPages: updatedBook.totalPages ?? 0,
+        isCompleted: updatedBook.isCompleted ?? false,
+        startedAt: updatedBook.startedAt ?? null,
+        completedAt: updatedBook.completedAt ?? null,
+        lastActivityAt: updatedBook.lastActivityAt ?? null,
       }).catch(() => {});
     }
   };
@@ -1087,7 +1074,6 @@ export default function App() {
             await clearLocalUserData();
             setReadingBooks([]);
             setWantToReadBooks([]);
-            setReadingRecords([]);
             setBookCache({});
             const [userData, fbReviews, fbReadingBooks, fbCompletedBooks, fbWantBooks, fbRecords] = await Promise.all([
               getUser(userInfo.id),
@@ -1103,10 +1089,14 @@ export default function App() {
             setCurrentUser(fullUser);
             await AsyncStorage.setItem('currentUser', JSON.stringify(fullUser));
             if (fbReviews.length > 0) setReviews(await enrichWithProfiles(fbReviews.map(normalizeReview)));
-            const allReadingBooks = [...fbReadingBooks, ...fbCompletedBooks];
+            const toHttpsCover = (url) => url?.replace(/^http:\/\//, 'https://') || null;
+            const allReadingBooks = [...fbReadingBooks, ...fbCompletedBooks].map(b => ({ ...b, coverImage: toHttpsCover(b.coverImage) }));
             if (allReadingBooks.length > 0) setReadingBooks(allReadingBooks);
             if (fbWantBooks.length > 0) setWantToReadBooks(fbWantBooks);
-            if (fbRecords.length > 0) setReadingRecords(fbRecords);
+            if (fbRecords.length > 0) {
+              setReadingRecords(fbRecords);
+              AsyncStorage.setItem('readingRecords', JSON.stringify(fbRecords)).catch(() => {});
+            }
             syncPendingRecords(userInfo.id);
             setIsLoggedIn(true);
           }}

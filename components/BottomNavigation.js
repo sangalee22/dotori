@@ -31,6 +31,11 @@ function AddRecordForm({ addRecordBook, addRecordDate, addRecordStartPage, setAd
   const [hours, setHours] = React.useState('');
   const [minutes, setMinutes] = React.useState('');
   const [seconds, setSeconds] = React.useState('');
+  const startPageRef = React.useRef(null);
+  const endPageRef = React.useRef(null);
+  const hoursRef = React.useRef(null);
+  const minutesRef = React.useRef(null);
+  const secondsRef = React.useRef(null);
 
   const bookRecords = readingRecords.filter(r => String(r.isbn) === String(addRecordBook?.isbn));
   const nextRecord = [...bookRecords]
@@ -44,11 +49,16 @@ function AddRecordForm({ addRecordBook, addRecordDate, addRecordStartPage, setAd
   const startPageNum = parseInt(addRecordStartPage);
   const endPageNum = parseInt(addRecordEndPage);
   const exceedsTotal = addRecordBook?.totalPages > 0 && !isNaN(endPageNum) && endPageNum > addRecordBook.totalPages;
-  const exceedsNext = nextStartPage !== null && addRecordEndPage.trim() !== '' && !isNaN(endPageNum) && endPageNum >= nextStartPage;
-  const isBlocked = nextStartPage !== null && nextStartPage === 0;
+  const exceedsNext = nextStartPage !== null && nextStartPage > 0 && addRecordEndPage.trim() !== '' && !isNaN(endPageNum) && endPageNum >= nextStartPage;
+  const isBlocked = false;
   const startBelowPrev = prevEndPage !== null && addRecordStartPage.trim() !== '' && !isNaN(startPageNum) && startPageNum < prevEndPage;
   const endBelowPrev = prevEndPage !== null && addRecordEndPage.trim() !== '' && !isNaN(endPageNum) && endPageNum <= prevEndPage;
   const numOnly = (setter) => (t) => setter(t.replace(/[^0-9]/g, ''));
+  const clampedSub60 = (setter) => (t) => {
+    const cleaned = t.replace(/[^0-9]/g, '');
+    const num = parseInt(cleaned) || 0;
+    setter(num > 59 ? '59' : cleaned);
+  };
 
   const getDuration = () =>
     (parseInt(hours) || 0) * 3600 + (parseInt(minutes) || 0) * 60 + (parseInt(seconds) || 0);
@@ -59,11 +69,13 @@ function AddRecordForm({ addRecordBook, addRecordDate, addRecordStartPage, setAd
         {/* 읽기 시작한 페이지 */}
         <View style={arStyles.fieldGroup}>
           <TextField
+            ref={startPageRef}
             label="읽기 시작한 페이지"
             value={addRecordStartPage}
             onChangeText={(t) => setAddRecordStartPage(t.replace(/[^0-9]/g, ''))}
             keyboardType="number-pad"
             returnKeyType="next"
+            onSubmitEditing={() => endPageRef.current?.focus()}
             placeholder="0"
             error={startBelowPrev}
             helpText={startBelowPrev ? `이전 날짜 기록의 마지막 페이지(${prevEndPage}p) 이상이어야 합니다` : '미입력시 자동으로 처음부터 읽기 시작합니다.'}
@@ -73,11 +85,13 @@ function AddRecordForm({ addRecordBook, addRecordDate, addRecordStartPage, setAd
         {/* 읽은 마지막 페이지 */}
         <View style={arStyles.fieldGroup}>
           <TextField
+            ref={endPageRef}
             label="읽은 마지막 페이지"
             value={addRecordEndPage}
             onChangeText={(t) => setAddRecordEndPage(t.replace(/[^0-9]/g, ''))}
             keyboardType="number-pad"
-            returnKeyType="done"
+            returnKeyType="next"
+            onSubmitEditing={() => hoursRef.current?.focus()}
             placeholder="페이지를 입력해주세요"
             error={exceedsTotal || exceedsNext || endBelowPrev}
             helpText={
@@ -100,35 +114,40 @@ function AddRecordForm({ addRecordBook, addRecordDate, addRecordStartPage, setAd
             <View style={arStyles.timeCol}>
               <Text style={arStyles.timeLabel}>시간</Text>
               <TextField
+                ref={hoursRef}
                 value={hours}
                 onChangeText={numOnly(setHours)}
                 keyboardType="number-pad"
                 returnKeyType="next"
+                onSubmitEditing={() => minutesRef.current?.focus()}
                 placeholder="0"
               />
             </View>
             <View style={arStyles.timeCol}>
               <Text style={arStyles.timeLabel}>분</Text>
               <TextField
+                ref={minutesRef}
                 value={minutes}
-                onChangeText={numOnly(setMinutes)}
+                onChangeText={clampedSub60(setMinutes)}
                 keyboardType="number-pad"
                 returnKeyType="next"
+                onSubmitEditing={() => secondsRef.current?.focus()}
                 placeholder="0"
               />
             </View>
             <View style={arStyles.timeCol}>
               <Text style={arStyles.timeLabel}>초</Text>
               <TextField
+                ref={secondsRef}
                 value={seconds}
-                onChangeText={numOnly(setSeconds)}
+                onChangeText={clampedSub60(setSeconds)}
                 keyboardType="number-pad"
                 returnKeyType="done"
                 placeholder="0"
               />
             </View>
           </View>
-          <Text style={arStyles.helpText}>숫자만 입력 가능합니다</Text>
+          <Text style={arStyles.helpText}>분·초는 59까지 입력 가능합니다</Text>
         </View>
 
         {/* 이후 날짜 기록 제한 안내 */}
@@ -329,6 +348,10 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
   const endPageInputRef = React.useRef(null);
   const [sessionReadingDays, setSessionReadingDays] = React.useState(1);
   const isManualResultRef = React.useRef(false);
+  const [timerBook, setTimerBook] = React.useState(null);
+  const [timerBookTotalPages, setTimerBookTotalPages] = React.useState(0);
+  const [manualResultBook, setManualResultBook] = React.useState(null);
+  const [manualResultTotalPages, setManualResultTotalPages] = React.useState(0);
   const isBookSelectingRef = React.useRef(false);
   const isSavingRef = React.useRef(false);
   const isPlayPressRef = React.useRef(false);
@@ -412,12 +435,12 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
           elapsedBaseRef.current = savedElapsed ?? 0;
           setElapsed(savedElapsed ?? 0);
           setResultElapsed(savedElapsed ?? 0);
-          if (savedBook) setSelectedBook(savedBook);
+          if (savedBook) { setSelectedBook(savedBook); setTimerBook(savedBook); }
           if (savedStartPage !== undefined) setReadingStartPage(savedStartPage);
           if (savedStartTime) setReadingStartTime(new Date(savedStartTime));
           if (savedEndTime) setReadingEndTime(new Date(savedEndTime));
           if (savedReadingDays !== undefined) setSessionReadingDays(savedReadingDays);
-          if (savedTotalPages !== undefined) setSelectedBookTotalPages(savedTotalPages);
+          if (savedTotalPages !== undefined) { setSelectedBookTotalPages(savedTotalPages); setTimerBookTotalPages(savedTotalPages); }
           // isPlaying은 false 유지 → elapsed > 0이므로 타이머 일시정지 UI 표시
           return;
         }
@@ -429,7 +452,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
         elapsedBaseRef.current = restored;
         sessionStartTsRef.current = null;
         setElapsed(restored);
-        if (savedBook) setSelectedBook(savedBook);
+        if (savedBook) { setSelectedBook(savedBook); setTimerBook(savedBook); }
         if (savedStartPage !== undefined) setReadingStartPage(savedStartPage);
         if (savedStartTime) setReadingStartTime(new Date(savedStartTime));
         setIsPlaying(true);
@@ -469,7 +492,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
       }
       setIsResultModalVisible(false);
       onWriteReview?.({
-        book: selectedBook,
+        book: isManualResultRef.current ? manualResultBook : timerBook,
         endPage: parseInt(endPageInput) || 0,
         imageUri,
       });
@@ -493,6 +516,8 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
   };
 
   const handleStartReading = () => {
+    setTimerBook(selectedBook);
+    setTimerBookTotalPages(selectedBookTotalPages);
     setReadingStartTime(new Date());
     setReadingStartPage(parseInt(pageInput) || 0);
     setIsPageModalVisible(false);
@@ -713,7 +738,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
         onClose={() => setIsPauseModalVisible(false)}
       />
 
-      <Modal visible={isResultModalVisible} animationType="slide" onRequestClose={() => { setIsResultModalVisible(false); isManualResultRef.current = false; }}>
+      <Modal visible={isResultModalVisible} animationType="slide" onRequestClose={() => { setIsResultModalVisible(false); if (isManualResultRef.current) { setManualResultBook(null); setManualResultTotalPages(0); } else { setTimerBook(null); setTimerBookTotalPages(0); } isManualResultRef.current = false; }}>
         <View style={styles.resultModalContainer}>
           <DefaultHeader
             title="독서 결과"
@@ -725,7 +750,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
                 key="done"
                 variant="text"
                 size="large"
-                onPress={() => { setIsResultModalVisible(false); setCustomCardBg(null); isManualResultRef.current = false; AsyncStorage.removeItem('timerPendingState').catch(() => {}); }}
+                onPress={() => { setIsResultModalVisible(false); setCustomCardBg(null); if (isManualResultRef.current) { setManualResultBook(null); setManualResultTotalPages(0); } else { setTimerBook(null); setTimerBookTotalPages(0); } isManualResultRef.current = false; AsyncStorage.removeItem('timerPendingState').catch(() => {}); }}
               >
                 완료
               </Button>
@@ -749,13 +774,13 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
                   >
                     <ReadingResultCard
                       variant={selectedVariant}
-                      book={selectedBook}
+                      book={isManualResultRef.current ? manualResultBook : timerBook}
                       elapsed={resultElapsed}
                       startTime={readingStartTime}
                       endTime={readingEndTime}
                       startPage={readingStartPage}
                       endPage={parseInt(endPageInput) || 0}
-                      totalPages={selectedBookTotalPages}
+                      totalPages={isManualResultRef.current ? manualResultTotalPages : timerBookTotalPages}
                       readingDays={sessionReadingDays}
                       displayScale={previewScale}
                       customBackground={customCardBg}
@@ -780,13 +805,13 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
                         }}>
                           <ReadingResultCard
                             variant={selectedVariant}
-                            book={selectedBook}
+                            book={isManualResultRef.current ? manualResultBook : timerBook}
                             elapsed={resultElapsed}
                             startTime={readingStartTime}
                             endTime={readingEndTime}
                             startPage={readingStartPage}
                             endPage={parseInt(endPageInput) || 0}
-                            totalPages={selectedBookTotalPages}
+                            totalPages={isManualResultRef.current ? manualResultTotalPages : timerBookTotalPages}
                             readingDays={sessionReadingDays}
                             displayScale={previewScale}
                             customBackground={customCardBg}
@@ -889,6 +914,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
                   date: new Date().toISOString().split('T')[0],
                   isbn: selectedBook.isbn,
                   title: selectedBook.title,
+                  author: selectedBook.author,
                   cover: selectedBook.coverImage,
                   duration: resultElapsed,
                   createdAt: new Date().toISOString(),
@@ -1110,6 +1136,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
                 const ok = await onSaveReadingRecord?.({
                   isbn: addRecordBook?.isbn,
                   title: addRecordBook?.title,
+                  author: addRecordBook?.author,
                   cover: addRecordBook?.coverImage,
                   duration,
                   startPage,
@@ -1129,12 +1156,12 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
                   isCompleted,
                 });
 
-                // 결과 팝업을 위한 상태 세팅
-                setSelectedBook(addRecordBook);
+                // 결과 팝업을 위한 상태 세팅 (타이머 flow와 완전히 분리)
+                setManualResultBook(addRecordBook);
+                setManualResultTotalPages(totalPages);
                 setResultElapsed(duration);
                 setReadingStartPage(startPage);
                 setEndPageInput(String(endPage));
-                setSelectedBookTotalPages(totalPages);
                 setReadingStartTime(null);
                 setReadingEndTime(null);
                 setSessionReadingDays(1);

@@ -26,9 +26,7 @@
       "checkAutomatically": "ON_LOAD",
       "fallbackToCacheTimeout": 0
     },
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
+    "runtimeVersion": "1.0.0",
     "ios": {
       "bundleIdentifier": "com.sanga.dotori",
       "supportsTablet": true,

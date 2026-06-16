@@ -1372,7 +1372,13 @@ export default function BookDetail({
                       value={reviewPageInput}
                       onChangeText={(text) => {
                         const numericValue = text.replace(/[^0-9]/g, '');
-                        setReviewPageInput(numericValue);
+                        const totalPages = bookData?.subInfo?.itemPage || 0;
+                        if (totalPages > 0 && numericValue !== '') {
+                          const num = parseInt(numericValue, 10);
+                          setReviewPageInput(num > totalPages ? String(totalPages) : numericValue);
+                        } else {
+                          setReviewPageInput(numericValue);
+                        }
                       }}
                       placeholder=" "
                       keyboardType="number-pad"

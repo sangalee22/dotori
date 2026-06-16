@@ -570,7 +570,12 @@ export default function DotoriRoomScreen({ readingBooks = [], reviews = [], read
           setDetailItem(prev => prev ? { ...prev, record: updated } : null);
         }}
         onComplete={() => {
-          onCompleteBook?.(detailItem?.book);
+          const record = detailItem?.record;
+          const book = detailItem?.book
+            ?? readingBooks.find(b => String(b.isbn) === String(record?.isbn))
+            ?? (record?.isbn ? { isbn: record.isbn, title: record.title ?? '', totalPages: record.totalPages ?? 0, coverImage: record.cover ?? null } : null);
+          if (!book) return;
+          onCompleteBook?.(book);
           setDetailItem(null);
           setTimeout(() => showToast('완독! 한 권의 도토리가 쌓였어요 🌰'), 400);
         }}

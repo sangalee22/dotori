@@ -52,7 +52,7 @@ function RecordItem({ record, book, readingDays, isLast, onPress }) {
           <Image source={{ uri: book?.coverImage ?? book?.cover ?? record?.cover }} style={styles.cover} resizeMode="cover" />
           <View style={styles.info}>
             <Text style={styles.bookTitle} numberOfLines={2}>{(book?.title ?? record?.title)?.split(' - ')[0].trim()}</Text>
-            <Text style={styles.author} numberOfLines={1}>{book?.author ?? ''}</Text>
+            <Text style={styles.author} numberOfLines={1}>{book?.author ?? record?.author ?? ''}</Text>
             <Text style={styles.time}>{formatTime(record.createdAt)}</Text>
             <Text style={styles.duration}>{formatDuration(record.duration)}</Text>
           </View>
@@ -98,7 +98,7 @@ export default function CalendarRecordBottomSheet({ visible, onClose, records = 
             >
               {records.length > 0 ? (
                 [...records].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).map((record, i) => {
-                  const book = readingBooks.find(b => b.isbn === record.isbn);
+                  const book = readingBooks.find(b => String(b.isbn) === String(record.isbn));
                   const readingDays = new Set(
                     readingRecords.filter(r => r.isbn === record.isbn && r.date <= record.date).map(r => r.date)
                   ).size;

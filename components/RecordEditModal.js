@@ -15,9 +15,16 @@ export default function RecordEditModal({ visible, onClose, record, book, onSave
   const [hours, setHours] = React.useState('0');
   const [minutes, setMinutes] = React.useState('0');
   const [seconds, setSeconds] = React.useState('0');
+  const [startPageEdit, setStartPageEdit] = React.useState('');
   const [page, setPage] = React.useState('');
 
-  const original = React.useRef({ hours: '0', minutes: '0', seconds: '0', page: '' });
+  const hoursRef = React.useRef(null);
+  const minutesRef = React.useRef(null);
+  const secondsRef = React.useRef(null);
+  const startPageRef = React.useRef(null);
+  const endPageRef = React.useRef(null);
+
+  const original = React.useRef({ hours: '0', minutes: '0', seconds: '0', startPage: '', page: '' });
 
   React.useEffect(() => {
     if (visible && record) {
@@ -25,20 +32,22 @@ export default function RecordEditModal({ visible, onClose, record, book, onSave
       const h = String(Math.floor(d / 3600));
       const m = String(Math.floor((d % 3600) / 60));
       const s = String(d % 60);
+      const sp = String(record.startPage ?? '');
       const p = String(record.endPage ?? '');
-      setHours(h); setMinutes(m); setSeconds(s); setPage(p);
-      original.current = { hours: h, minutes: m, seconds: s, page: p };
+      setHours(h); setMinutes(m); setSeconds(s); setStartPageEdit(sp); setPage(p);
+      original.current = { hours: h, minutes: m, seconds: s, startPage: sp, page: p };
     }
   }, [visible, record]);
 
   const totalPages = book?.totalPages ?? 0;
   const isCompleted = book?.isCompleted ?? false;
-  const startPage = record?.startPage ?? 0;
+  const startPageNum = parseInt(startPageEdit) || 0;
   const pageNum = parseInt(page) || 0;
+  const startPageChanged = startPageEdit !== original.current.startPage;
   const pageChanged = page !== original.current.page;
   const timeChanged = hours !== original.current.hours || minutes !== original.current.minutes || seconds !== original.current.seconds;
-  const hasChanged = pageChanged || timeChanged;
-  const pageBelowStart = page !== '' && pageNum < startPage;
+  const hasChanged = pageChanged || timeChanged || startPageChanged;
+  const pageBelowStart = page !== '' && startPageEdit !== '' && pageNum < startPageNum;
   const pageError = (totalPages > 0 && pageNum > totalPages) || pageBelowStart;
 
   const handleSave = () => {
@@ -50,11 +59,17 @@ export default function RecordEditModal({ visible, onClose, record, book, onSave
     onSave?.({
       ...record,
       duration: totalSeconds,
+      startPage: startPageNum,
       endPage: pageNum || record?.endPage || 0,
     });
   };
 
   const numOnly = (setter) => (text) => setter(text.replace(/[^0-9]/g, ''));
+  const clampedSub60 = (setter) => (text) => {
+    const cleaned = text.replace(/[^0-9]/g, '');
+    const num = parseInt(cleaned) || 0;
+    setter(num > 59 ? '59' : cleaned);
+  };
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
@@ -74,37 +89,55 @@ export default function RecordEditModal({ visible, onClose, record, book, onSave
             <View style={styles.timeCol}>
               <Text style={styles.label}>시간</Text>
               <TextField
+                ref={hoursRef}
                 value={hours}
                 onChangeText={numOnly(setHours)}
                 keyboardType="number-pad"
                 returnKeyType="next"
+                onSubmitEditing={() => minutesRef.current?.focus()}
               />
             </View>
             <View style={styles.timeCol}>
               <Text style={styles.label}>분</Text>
               <TextField
+                ref={minutesRef}
                 value={minutes}
-                onChangeText={numOnly(setMinutes)}
+                onChangeText={clampedSub60(setMinutes)}
                 keyboardType="number-pad"
                 returnKeyType="next"
+                onSubmitEditing={() => secondsRef.current?.focus()}
               />
             </View>
             <View style={styles.timeCol}>
               <Text style={styles.label}>초</Text>
               <TextField
+                ref={secondsRef}
                 value={seconds}
-                onChangeText={numOnly(setSeconds)}
+                onChangeText={clampedSub60(setSeconds)}
                 keyboardType="number-pad"
                 returnKeyType="next"
+                onSubmitEditing={() => startPageRef.current?.focus()}
               />
             </View>
           </View>
-          <Text style={styles.helpText}>숫자만 입력 가능합니다</Text>
+          <Text style={styles.helpText}>분·초는 59까지 입력 가능합니다</Text>
 
           {/* 페이지 */}
           <View style={styles.pageGroup}>
-            <Text style={styles.label}>페이지</Text>
+            <Text style={styles.label}>읽기 시작한 페이지</Text>
             <TextField
+              ref={startPageRef}
+              value={startPageEdit}
+              onChangeText={numOnly(setStartPageEdit)}
+              keyboardType="number-pad"
+              returnKeyType="next"
+              onSubmitEditing={() => endPageRef.current?.focus()}
+            />
+          </View>
+          <View style={styles.pageGroup}>
+            <Text style={styles.label}>어디까지 읽었나요</Text>
+            <TextField
+              ref={endPageRef}
               value={page}
               onChangeText={numOnly(setPage)}
               keyboardType="number-pad"
@@ -115,7 +148,7 @@ export default function RecordEditModal({ visible, onClose, record, book, onSave
                 isCompleted
                   ? '페이지 수를 수정하시면 완독한 기록에서 없어집니다'
                   : pageBelowStart
-                  ? `읽기 시작한 페이지(${startPage}p)보다 이전으로 수정할 수 없습니다`
+                  ? `읽기 시작한 페이지(${startPageNum}p)보다 이전으로 수정할 수 없습니다`
                   : totalPages > 0 && pageNum > totalPages
                   ? `책의 총 페이지 수(${totalPages}p)보다 클 수 없습니다`
                   : undefined
