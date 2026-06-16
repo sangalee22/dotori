@@ -847,17 +847,27 @@ export default function App() {
       bookListScrollRef.current?.scrollTo({ x: idx * carouselSnap, animated: false });
       setActiveBestIndex(idx);
       setCarouselReady(true);
-    }, 50);
+    }, 100);
     return () => clearTimeout(t);
   }, [currentBooks.length]);
 
   // 주간 베스트 자동 슬라이드
   React.useEffect(() => {
     if (currentBooks.length === 0) return;
+    const len = currentBooks.length;
     clearInterval(bestAutoSlideRef.current);
     bestAutoSlideRef.current = setInterval(() => {
       setActiveBestIndex(prev => {
         const next = prev + 1;
+        if (next >= len * 2) {
+          // 3번째 복사본으로 애니메이션 후 중간 복사본으로 점프
+          bookListScrollRef.current?.scrollTo({ x: next * carouselSnap, animated: true });
+          const resetIdx = len + (next % len);
+          setTimeout(() => {
+            bookListScrollRef.current?.scrollTo({ x: resetIdx * carouselSnap, animated: false });
+          }, 350);
+          return resetIdx;
+        }
         bookListScrollRef.current?.scrollTo({ x: next * carouselSnap, animated: true });
         return next;
       });
@@ -1283,11 +1293,13 @@ export default function App() {
             </View>
           ) : (
             <ScrollView
+              key={currentBooks.length}
               ref={bookListScrollRef}
               horizontal
               showsHorizontalScrollIndicator={false}
               snapToInterval={carouselSnap}
               decelerationRate="fast"
+              contentOffset={{ x: loopOffset * carouselSnap, y: 0 }}
               style={{ height: 310, opacity: carouselReady ? 1 : 0 }}
               contentContainerStyle={{ paddingHorizontal: carouselSidePadding, alignItems: 'flex-start' }}
               onScrollBeginDrag={() => clearInterval(bestAutoSlideRef.current)}
@@ -1308,6 +1320,14 @@ export default function App() {
                 bestAutoSlideRef.current = setInterval(() => {
                   setActiveBestIndex(prev => {
                     const next = prev + 1;
+                    if (next >= len * 2) {
+                      bookListScrollRef.current?.scrollTo({ x: next * carouselSnap, animated: true });
+                      const resetIdx = len + (next % len);
+                      setTimeout(() => {
+                        bookListScrollRef.current?.scrollTo({ x: resetIdx * carouselSnap, animated: false });
+                      }, 350);
+                      return resetIdx;
+                    }
                     bookListScrollRef.current?.scrollTo({ x: next * carouselSnap, animated: true });
                     return next;
                   });
