@@ -20,6 +20,15 @@
     "experiments": {
       "baseUrl": "/dotori"
     },
+    "updates": {
+      "url": "https://u.expo.dev/0e3b3a29-1e25-44e8-b071-428b692c6d54",
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "ios": {
       "bundleIdentifier": "com.sanga.dotori",
       "supportsTablet": true,

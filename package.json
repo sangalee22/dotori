@@ -25,6 +25,7 @@
     "expo-linear-gradient": "~15.0.8",
     "expo-media-library": "~18.2.1",
     "expo-status-bar": "~3.0.9",
+    "expo-updates": "^56.0.19",
     "expo-web-browser": "~15.0.11",
     "firebase": "^12.14.0",
     "react": "19.1.0",
