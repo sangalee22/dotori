@@ -183,6 +183,14 @@ export default function BookDetail({
   const [readingProgress, setReadingProgress] = React.useState(0); // Default 0%
   const [currentPage, setCurrentPage] = React.useState(initialReadingState?.currentPage || 0);
 
+  // 외부(readingBooks)에서 완독/진도 변경 시 로컬 state 동기화
+  React.useEffect(() => {
+    if (!initialReadingState) return;
+    setIsReading(initialReadingState.isReading || false);
+    setIsCompleted(initialReadingState.isCompleted || false);
+    setCurrentPage(initialReadingState.currentPage || 0);
+  }, [initialReadingState?.isCompleted, initialReadingState?.currentPage]);
+
   // Tab state
   const [activeTab, setActiveTab] = React.useState(initialTab); // 'info' or 'reviews'
   const [showUpToMyProgress, setShowUpToMyProgress] = React.useState(false); // Filter reviews by progress
