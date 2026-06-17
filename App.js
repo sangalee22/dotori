@@ -1,4 +1,5 @@
 import React from 'react';
+import * as Updates from 'expo-updates';
 import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, Text, View, ScrollView, Image, useWindowDimensions, TouchableOpacity, ActivityIndicator, Platform, Keyboard, Animated } from 'react-native';
@@ -49,6 +50,19 @@ const bookCoverMower = require('./assets/book-cover-mower.png');
 const nowReadingNull = require('./assets/img_nowreding-null.png');
 
 export default function App() {
+  React.useEffect(() => {
+    if (__DEV__) return;
+    (async () => {
+      try {
+        const check = await Updates.checkForUpdateAsync();
+        if (check.isAvailable) {
+          await Updates.fetchUpdateAsync();
+          await Updates.reloadAsync();
+        }
+      } catch {}
+    })();
+  }, []);
+
   const [fontsLoaded] = useFonts({
     'Paperlogy-Thin':       require('./assets/fonts/Paperlogy-1Thin.ttf'),
     'Paperlogy-ExtraLight': require('./assets/fonts/Paperlogy-2ExtraLight.ttf'),
