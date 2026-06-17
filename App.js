@@ -393,7 +393,16 @@ export default function App() {
               getReviews(),
             ]);
 
-            const allFbReadingBooks = [...fbReadingBooks, ...fbCompletedBooks];
+            const toHttpsCoverFb = (url) => url?.replace(/^http:\/\//, 'https://') || null;
+            const seenFbIsbn = new Set();
+            const allFbReadingBooks = [...fbCompletedBooks, ...fbReadingBooks]
+              .filter(b => {
+                const key = String(b.isbn);
+                if (seenFbIsbn.has(key)) return false;
+                seenFbIsbn.add(key);
+                return true;
+              })
+              .map(b => ({ ...b, coverImage: toHttpsCoverFb(b.coverImage) }));
             if (allFbReadingBooks.length > 0) {
               setReadingBooks(prev => {
                 const localMap = new Map(prev.map(b => [String(b.isbn), b]));
@@ -406,7 +415,14 @@ export default function App() {
                 return fbWantBooks.map(fb => ({ ...localMap.get(String(fb.isbn)), ...fb }));
               });
             }
-            if (fbRecords.length > 0) setReadingRecords(fbRecords);
+            if (fbRecords.length > 0) {
+              const bookMap = new Map(allFbReadingBooks.map(b => [String(b.isbn), b]));
+              setReadingRecords(fbRecords.map(r => {
+                if (r.title && r.cover) return r;
+                const b = bookMap.get(String(r.isbn));
+                return b ? { ...r, title: r.title || b.title, cover: r.cover || b.coverImage } : r;
+              }));
+            }
             if (fbReviews.length > 0) {
               const normalized = await enrichWithProfiles(fbReviews.map(normalizeReview));
               setReviews(prev => {
@@ -446,7 +462,7 @@ export default function App() {
       const synced = [];
       for (const item of userPending) {
         try {
-          const { _userId, title: _t, cover: _c, totalPages: _tp, ...firestoreRecord } = item;
+          const { _userId, ...firestoreRecord } = item;
           const docRef = await addReadingRecord(userId, firestoreRecord);
           synced.push({ ...item, id: docRef.id });
           succeeded.push(item.createdAt);
@@ -480,8 +496,7 @@ export default function App() {
   const handleSaveReadingRecord = React.useCallback(async (record) => {
     if (currentUser?.id) {
       try {
-        const { title: _t, cover: _c, totalPages: _tp, ...firestoreRecord } = record;
-        const docRef = await addReadingRecord(currentUser.id, firestoreRecord);
+        const docRef = await addReadingRecord(currentUser.id, record);
         const saved = { ...record, id: docRef.id };
         setReadingRecords(prev => {
           const updated = [...prev, saved];
@@ -534,7 +549,7 @@ export default function App() {
 
   const handleEditReadingRecord = React.useCallback((updated) => {
     if (updated.id) {
-      const { id, title: _t, cover: _c, totalPages: _tp, ...fields } = updated;
+      const { id, ...fields } = updated;
       updateReadingRecord(id, fields).catch(() => {});
     }
 
@@ -1090,12 +1105,26 @@ export default function App() {
             await AsyncStorage.setItem('currentUser', JSON.stringify(fullUser));
             if (fbReviews.length > 0) setReviews(await enrichWithProfiles(fbReviews.map(normalizeReview)));
             const toHttpsCover = (url) => url?.replace(/^http:\/\//, 'https://') || null;
-            const allReadingBooks = [...fbReadingBooks, ...fbCompletedBooks].map(b => ({ ...b, coverImage: toHttpsCover(b.coverImage) }));
+            const seenIsbn = new Set();
+            const allReadingBooks = [...fbCompletedBooks, ...fbReadingBooks]
+              .filter(b => {
+                const key = String(b.isbn);
+                if (seenIsbn.has(key)) return false;
+                seenIsbn.add(key);
+                return true;
+              })
+              .map(b => ({ ...b, coverImage: toHttpsCover(b.coverImage) }));
             if (allReadingBooks.length > 0) setReadingBooks(allReadingBooks);
             if (fbWantBooks.length > 0) setWantToReadBooks(fbWantBooks);
             if (fbRecords.length > 0) {
-              setReadingRecords(fbRecords);
-              AsyncStorage.setItem('readingRecords', JSON.stringify(fbRecords)).catch(() => {});
+              const bookMap2 = new Map(allReadingBooks.map(b => [String(b.isbn), b]));
+              const enriched = fbRecords.map(r => {
+                if (r.title && r.cover) return r;
+                const b = bookMap2.get(String(r.isbn));
+                return b ? { ...r, title: r.title || b.title, cover: r.cover || b.coverImage } : r;
+              });
+              setReadingRecords(enriched);
+              AsyncStorage.setItem('readingRecords', JSON.stringify(enriched)).catch(() => {});
             }
             syncPendingRecords(userInfo.id);
             setIsLoggedIn(true);
