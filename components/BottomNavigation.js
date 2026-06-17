@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, Modal, ScrollView, ActivityIndicator, Platform, Animated, PanResponder, Pressable, AppState } from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet, Modal, ScrollView, KeyboardAvoidingView, ActivityIndicator, Platform, Animated, PanResponder, Pressable, AppState } from 'react-native';
 import { BlurView } from 'expo-blur';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { saveCardImage, captureCard } from '../utils/imageSave';
@@ -64,8 +64,17 @@ function AddRecordForm({ addRecordBook, addRecordDate, addRecordStartPage, setAd
     (parseInt(hours) || 0) * 3600 + (parseInt(minutes) || 0) * 60 + (parseInt(seconds) || 0);
 
   return (
-    <View style={arStyles.container}>
-      <View style={arStyles.fields}>
+    <KeyboardAvoidingView
+      style={arStyles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={insets.top + 52}
+    >
+      <ScrollView
+        style={arStyles.fields}
+        contentContainerStyle={arStyles.fieldsContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
         {/* 읽기 시작한 페이지 */}
         <View style={arStyles.fieldGroup}>
           <TextField
@@ -158,7 +167,7 @@ function AddRecordForm({ addRecordBook, addRecordDate, addRecordStartPage, setAd
             </Text>
           </View>
         )}
-      </View>
+      </ScrollView>
 
       <View style={[arStyles.footer, { paddingBottom: insets.bottom + Spacing.md }]}>
         <Button
@@ -171,13 +180,14 @@ function AddRecordForm({ addRecordBook, addRecordDate, addRecordStartPage, setAd
           기록
         </Button>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
 const arStyles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'space-between' },
-  fields: { gap: Spacing.xl },
+  container: { flex: 1 },
+  fields: { flex: 1 },
+  fieldsContent: { gap: Spacing.xl, paddingBottom: Spacing.xl },
   fieldGroup: { gap: Spacing.xs },
   label: { ...Typography.body2Medium, color: Colors.gray700 },
   infoBox: {
