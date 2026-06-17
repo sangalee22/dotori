@@ -78,9 +78,9 @@ export default function App() {
   });
 
   const { width: windowWidth } = useWindowDimensions();
-  useAppOpenAd(isLoggedIn);
   const [showSplash, setShowSplash] = React.useState(true); // Show splash screen on app start
   const [isLoggedIn, setIsLoggedIn] = React.useState(false); // Track login state
+  useAppOpenAd(isLoggedIn);
   const [isInSignUpFlow, setIsInSignUpFlow] = React.useState(false); // Track if user is in sign-up process
   const [signUpUserInfo, setSignUpUserInfo] = React.useState(null); // Store user info during sign-up
   const [signUpStep, setSignUpStep] = React.useState('nickname'); // 'nickname' or 'terms'
