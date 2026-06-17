@@ -59,7 +59,7 @@ function AppleIcon() {
   );
 }
 
-export default function MyScreen({ reviews = [], currentUser, readingRecords = [], readingBooks = [], onBookPress, showSettings = false, onSettingsClose, onSettingsOpen, onLogout, onWithdraw, onUpdateUser, onEditReview, onDeleteReview }) {
+export default function MyScreen({ reviews = [], currentUser, readingRecords = [], readingBooks = [], onBookPress, showSettings = false, onSettingsClose, onSettingsOpen, onLogout, onWithdraw, onUpdateUser, onEditReview, onDeleteReview, onToggleLike }) {
   const insets = useSafeAreaInsets();
   const { showToast } = useToast();
   const [isProfileModalVisible, setIsProfileModalVisible] = React.useState(false);
@@ -321,6 +321,8 @@ export default function MyScreen({ reviews = [], currentUser, readingRecords = [
                   myCurrentPage={Infinity}
                   isCompleted={item.isCompleted}
                   isMyReview={true}
+                  currentUser={currentUser}
+                  onToggleLike={onToggleLike}
                   showBookInfo={true}
                   book={getBook(item)}
                   onBookPress={(book) => onBookPress && onBookPress({ ...book, isbn: item.bookIsbn, coverImage: book?.cover })}

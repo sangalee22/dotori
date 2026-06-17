@@ -1657,6 +1657,7 @@ export default function App() {
               }}
               onEditReview={handleOpenEditReviewFromFeed}
               onDeleteReview={handleDeleteReview}
+              onToggleLike={handleToggleLike}
             />
           </View>
 
