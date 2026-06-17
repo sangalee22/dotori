@@ -31,7 +31,7 @@
     },
     "ios": {
       "bundleIdentifier": "com.sanga.dotori",
-      "supportsTablet": true,
+      "supportsTablet": false,
       "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
@@ -69,10 +69,7 @@
         "READ_MEDIA_IMAGES",
         "READ_EXTERNAL_STORAGE"
       ],
-      "edgeToEdgeEnabled": true,
-      "navigationBar": {
-        "backgroundColor": "#ffffff"
-      }
+      "edgeToEdgeEnabled": true
     },
     "web": {
       "favicon": "./assets/favicon.png"

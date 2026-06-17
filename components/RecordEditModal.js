@@ -142,15 +142,14 @@ export default function RecordEditModal({ visible, onClose, record, book, onSave
               onChangeText={numOnly(setPage)}
               keyboardType="number-pad"
               returnKeyType="done"
-              disabled={isCompleted}
               error={pageError}
               helpText={
-                isCompleted
-                  ? '페이지 수를 수정하시면 완독한 기록에서 없어집니다'
-                  : pageBelowStart
+                pageBelowStart
                   ? `읽기 시작한 페이지(${startPageNum}p)보다 이전으로 수정할 수 없습니다`
                   : totalPages > 0 && pageNum > totalPages
                   ? `책의 총 페이지 수(${totalPages}p)보다 클 수 없습니다`
+                  : totalPages > 0
+                  ? `책의 마지막 페이지(${totalPages}p)`
                   : undefined
               }
             />

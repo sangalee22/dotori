@@ -73,6 +73,7 @@ export default function App() {
   const [signUpNickname, setSignUpNickname] = React.useState(''); // Store nickname during sign-up
   const [activeTab, setActiveTab] = React.useState('종합');
   const [activeBestReviewPage, setActiveBestReviewPage] = React.useState(0);
+  const [activeReadingPage, setActiveReadingPage] = React.useState(0);
   const [bestReviews, setBestReviews] = React.useState([]);
   const [activeBottomTab, setActiveBottomTab] = React.useState('home');
   const [showMySettings, setShowMySettings] = React.useState(false);
@@ -577,29 +578,26 @@ export default function App() {
       updateReadingRecord(id, fields).catch(() => {});
     }
 
-    let latestRecord = null;
     setReadingRecords(prev => {
       const next = prev.map(r =>
         String(r.isbn) === String(updated.isbn) && r.createdAt === updated.createdAt ? updated : r
       );
       AsyncStorage.setItem('readingRecords', JSON.stringify(next)).catch(() => {});
-      const bookRecords = next.filter(r => String(r.isbn) === String(updated.isbn));
-      latestRecord = [...bookRecords].sort((a, b) => {
-        const da = a.date ?? a.createdAt ?? '';
-        const db = b.date ?? b.createdAt ?? '';
-        if (da !== db) return db.localeCompare(da);
-        return (b.createdAt ?? '').localeCompare(a.createdAt ?? '');
-      })[0] ?? null;
       return next;
     });
 
-    if (latestRecord) {
-      setReadingBooks(prevBooks => prevBooks.map(book =>
-        String(book.isbn) === String(updated.isbn)
-          ? { ...book, currentPage: latestRecord.endPage ?? book.currentPage }
-          : book
-      ));
-    }
+    setReadingBooks(prevBooks => prevBooks.map(book => {
+      if (String(book.isbn) !== String(updated.isbn)) return book;
+      const newEndPage = updated.endPage ?? book.currentPage;
+      const totalPages = book.totalPages ?? 0;
+      const isNowCompleted = totalPages > 0 && newEndPage >= totalPages;
+      return {
+        ...book,
+        currentPage: newEndPage,
+        isCompleted: isNowCompleted,
+        completedAt: isNowCompleted ? (book.completedAt ?? new Date().toISOString()) : null,
+      };
+    }));
   }, []);
 
   // Save reviews to AsyncStorage whenever it changes
@@ -796,26 +794,21 @@ export default function App() {
     );
   };
 
-  // Get the most recent active book (excluding completed books)
-  const getMostRecentActiveBook = () => {
-    const activeBooks = readingBooks.filter(book => !book.isCompleted);
-    if (activeBooks.length === 0) return null;
+  const activeReadingBooks = readingBooks
+    .filter(book => !book.isCompleted)
+    .sort((a, b) => new Date(b.lastActivityAt) - new Date(a.lastActivityAt));
 
-    return activeBooks.reduce((mostRecent, current) => {
-      const currentActivity = new Date(current.lastActivityAt);
-      const mostRecentActivity = new Date(mostRecent.lastActivityAt);
-      return currentActivity > mostRecentActivity ? current : mostRecent;
-    });
+  const currentReadingBook = activeReadingBooks[0] ?? null;
+
+  const getBookTotalPages = (book) => {
+    if (!book) return 0;
+    if (book.totalPages > 0) return book.totalPages;
+    return readingRecords
+      .filter(r => String(r.isbn) === String(book.isbn) && r.totalPages > 0)
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0]?.totalPages ?? 0;
   };
 
-  const currentReadingBook = getMostRecentActiveBook();
-  const currentReadingBookTotalPages = currentReadingBook
-    ? (currentReadingBook.totalPages > 0
-        ? currentReadingBook.totalPages
-        : readingRecords
-            .filter(r => String(r.isbn) === String(currentReadingBook.isbn) && r.totalPages > 0)
-            .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0]?.totalPages ?? 0)
-    : 0;
+  const currentReadingBookTotalPages = getBookTotalPages(currentReadingBook);
 
   // Handle book press from recent books or search results
   const handleRecentBookPress = (book) => {
@@ -1177,83 +1170,164 @@ export default function App() {
               showsVerticalScrollIndicator={false}
             >
               {/* Now Reading Section */}
-            <View style={[styles.section, !currentReadingBook && { paddingHorizontal: 0 }]}>
-              {currentReadingBook ? (
-                <TouchableOpacity
-                  style={styles.nowReading}
-                  onPress={() => {
-                    // Reset BookDetail states to default when clicking on book cover
-                    setBookDetailInitialTab('info');
-                    setBookDetailOpenReviewModal(false);
-                    setSelectedBook(currentReadingBook);
-                    addToRecentBooks(currentReadingBook);
-                    setPreviousView(currentView);
-                    setCurrentView('bookDetail');
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.bookCoverSmall}>
-                    {currentReadingBook.coverImage ? (
-                      <Image
-                        source={typeof currentReadingBook.coverImage === 'string'
-                          ? { uri: currentReadingBook.coverImage }
-                          : currentReadingBook.coverImage
-                        }
-                        style={styles.bookCoverPlaceholder}
-                        resizeMode="cover"
-                      />
-                    ) : (
-                      <View style={styles.bookCoverPlaceholder} />
-                    )}
-                  </View>
-                  <View style={styles.nowReadingInfo}>
-                    <View>
-                      <Text style={styles.bookTitle}>
-                        {currentReadingBook.title ? currentReadingBook.title.split(' - ')[0].trim() : ''}
-                      </Text>
-                      <Text style={styles.bookAuthor}>{currentReadingBook.author || ''}</Text>
-                    </View>
-                    <View style={{ flex: 1, minHeight: Spacing.sm }} />
-                    <View style={styles.nowReadingBottom}>
-                      <View style={styles.progressSection}>
-                        <Text style={styles.progressText}>
-                          <Text style={styles.progressPercent}>
-                            {currentReadingBookTotalPages > 0
-                              ? Math.round((currentReadingBook.currentPage / currentReadingBookTotalPages) * 100)
-                              : 0}%
-                          </Text> 읽음
-                        </Text>
-                        <View style={styles.progressBarBg}>
-                          <View style={[
-                            styles.progressBar,
-                            { width: `${currentReadingBookTotalPages > 0
-                                ? Math.round((currentReadingBook.currentPage / currentReadingBookTotalPages) * 100)
-                                : 0}%`
-                            }
-                          ]} />
-                        </View>
-                      </View>
-                      <Button
-                        variant="primary"
-                        size="medium"
-                        onPress={() => {
-                          setBookDetailInitialTab('reviews');
-                          setBookDetailOpenReviewModal(true);
-                          setSelectedBook(currentReadingBook);
-                          addToRecentBooks(currentReadingBook);
-                          setPreviousView(currentView);
-                          setCurrentView('bookDetail');
+            <View style={[styles.section, activeReadingBooks.length === 0 && { paddingHorizontal: 0 }]}>
+              {activeReadingBooks.length > 0 ? (
+                <>
+                  {activeReadingBooks.length === 1 ? (
+                    <TouchableOpacity
+                      style={styles.nowReading}
+                      onPress={() => {
+                        setBookDetailInitialTab('info');
+                        setBookDetailOpenReviewModal(false);
+                        setSelectedBook(activeReadingBooks[0]);
+                        addToRecentBooks(activeReadingBooks[0]);
+                        setPreviousView(currentView);
+                        setCurrentView('bookDetail');
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      {(() => {
+                        const book = activeReadingBooks[0];
+                        const totalPages = getBookTotalPages(book);
+                        const progress = totalPages > 0 ? Math.round((book.currentPage / totalPages) * 100) : 0;
+                        return (
+                          <>
+                            <View style={styles.bookCoverSmall}>
+                              {book.coverImage ? (
+                                <Image
+                                  source={typeof book.coverImage === 'string' ? { uri: book.coverImage } : book.coverImage}
+                                  style={styles.bookCoverPlaceholder}
+                                  resizeMode="cover"
+                                />
+                              ) : (
+                                <View style={styles.bookCoverPlaceholder} />
+                              )}
+                            </View>
+                            <View style={styles.nowReadingInfo}>
+                              <View>
+                                <Text style={styles.bookTitle}>{book.title ? book.title.split(' - ')[0].trim() : ''}</Text>
+                                <Text style={styles.bookAuthor}>{book.author || ''}</Text>
+                              </View>
+                              <View style={{ flex: 1, minHeight: Spacing.sm }} />
+                              <View style={styles.nowReadingBottom}>
+                                <View style={styles.progressSection}>
+                                  <Text style={styles.progressText}>
+                                    <Text style={styles.progressPercent}>{progress}%</Text> 읽음
+                                  </Text>
+                                  <View style={styles.progressBarBg}>
+                                    <View style={[styles.progressBar, { width: `${progress}%` }]} />
+                                  </View>
+                                </View>
+                                <Button
+                                  variant="primary"
+                                  size="medium"
+                                  onPress={() => {
+                                    setBookDetailInitialTab('reviews');
+                                    setBookDetailOpenReviewModal(true);
+                                    setSelectedBook(book);
+                                    addToRecentBooks(book);
+                                    setPreviousView(currentView);
+                                    setCurrentView('bookDetail');
+                                  }}
+                                  style={{ alignSelf: 'flex-end' }}
+                                >
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                    <Text style={{ color: Colors.white, ...Typography.body2Medium }}>독후감 쓰기</Text>
+                                    <ArrowRightIcon width={20} height={20} color={Colors.white} />
+                                  </View>
+                                </Button>
+                              </View>
+                            </View>
+                          </>
+                        );
+                      })()}
+                    </TouchableOpacity>
+                  ) : (
+                    <>
+                      <ScrollView
+                        horizontal
+                        pagingEnabled
+                        showsHorizontalScrollIndicator={false}
+                        onMomentumScrollEnd={(e) => {
+                          const page = Math.round(e.nativeEvent.contentOffset.x / (windowWidth - Spacing.md * 2));
+                          setActiveReadingPage(page);
                         }}
-                        style={{ alignSelf: 'flex-end' }}
+                        scrollEventThrottle={16}
+                        decelerationRate="fast"
                       >
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                          <Text style={{ color: Colors.white, ...Typography.body2Medium }}>독후감 쓰기</Text>
-                          <ArrowRightIcon width={20} height={20} color={Colors.white} />
-                        </View>
-                      </Button>
-                    </View>
-                  </View>
-                </TouchableOpacity>
+                        {activeReadingBooks.map((book) => {
+                          const totalPages = getBookTotalPages(book);
+                          const progress = totalPages > 0 ? Math.round((book.currentPage / totalPages) * 100) : 0;
+                          return (
+                            <TouchableOpacity
+                              key={book.isbn}
+                              style={[styles.nowReading, { width: windowWidth - Spacing.md * 2 }]}
+                              onPress={() => {
+                                setBookDetailInitialTab('info');
+                                setBookDetailOpenReviewModal(false);
+                                setSelectedBook(book);
+                                addToRecentBooks(book);
+                                setPreviousView(currentView);
+                                setCurrentView('bookDetail');
+                              }}
+                              activeOpacity={0.7}
+                            >
+                              <View style={styles.bookCoverSmall}>
+                                {book.coverImage ? (
+                                  <Image
+                                    source={typeof book.coverImage === 'string' ? { uri: book.coverImage } : book.coverImage}
+                                    style={styles.bookCoverPlaceholder}
+                                    resizeMode="cover"
+                                  />
+                                ) : (
+                                  <View style={styles.bookCoverPlaceholder} />
+                                )}
+                              </View>
+                              <View style={styles.nowReadingInfo}>
+                                <View>
+                                  <Text style={styles.bookTitle}>{book.title ? book.title.split(' - ')[0].trim() : ''}</Text>
+                                  <Text style={styles.bookAuthor}>{book.author || ''}</Text>
+                                </View>
+                                <View style={{ flex: 1, minHeight: Spacing.sm }} />
+                                <View style={styles.nowReadingBottom}>
+                                  <View style={styles.progressSection}>
+                                    <Text style={styles.progressText}>
+                                      <Text style={styles.progressPercent}>{progress}%</Text> 읽음
+                                    </Text>
+                                    <View style={styles.progressBarBg}>
+                                      <View style={[styles.progressBar, { width: `${progress}%` }]} />
+                                    </View>
+                                  </View>
+                                  <Button
+                                    variant="primary"
+                                    size="medium"
+                                    onPress={() => {
+                                      setBookDetailInitialTab('reviews');
+                                      setBookDetailOpenReviewModal(true);
+                                      setSelectedBook(book);
+                                      addToRecentBooks(book);
+                                      setPreviousView(currentView);
+                                      setCurrentView('bookDetail');
+                                    }}
+                                    style={{ alignSelf: 'flex-end' }}
+                                  >
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                      <Text style={{ color: Colors.white, ...Typography.body2Medium }}>독후감 쓰기</Text>
+                                      <ArrowRightIcon width={20} height={20} color={Colors.white} />
+                                    </View>
+                                  </Button>
+                                </View>
+                              </View>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </ScrollView>
+                      <View style={styles.nowReadingIndicator}>
+                        <Navigator total={activeReadingBooks.length} active={activeReadingPage} />
+                      </View>
+                    </>
+                  )}
+                </>
               ) : (
                 <View style={styles.nowReadingNull}>
                   <Image
@@ -1262,7 +1336,7 @@ export default function App() {
                       styles.nowReadingNullImage,
                       windowWidth < 320 && {
                         width: windowWidth,
-                        height: windowWidth * (110 / 320), // Maintain aspect ratio
+                        height: windowWidth * (110 / 320),
                       }
                     ]}
                     resizeMode="contain"
@@ -1739,7 +1813,7 @@ export default function App() {
             onToggleLike={handleToggleLike}
             currentUser={currentUser}
             initialReadingState={readingBookData ? {
-              isReading: !readingBookData.isCompleted,
+              isReading: true,
               isCompleted: readingBookData.isCompleted || false,
               currentPage: readingBookData.currentPage || 0,
               totalPages: readingBookData.totalPages || 0,
@@ -1888,6 +1962,10 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
     padding: Spacing.xl,
     backgroundColor: Colors.gray50,
+  },
+  nowReadingIndicator: {
+    alignItems: 'center',
+    marginTop: Spacing.md,
   },
   nowReadingNull: {
     alignItems: 'flex-start',

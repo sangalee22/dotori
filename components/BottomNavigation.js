@@ -64,11 +64,7 @@ function AddRecordForm({ addRecordBook, addRecordDate, addRecordStartPage, setAd
     (parseInt(hours) || 0) * 3600 + (parseInt(minutes) || 0) * 60 + (parseInt(seconds) || 0);
 
   return (
-    <KeyboardAvoidingView
-      style={arStyles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={0}
-    >
+    <View style={arStyles.container}>
       <ScrollView
         style={arStyles.fields}
         contentContainerStyle={arStyles.fieldsContent}
@@ -180,7 +176,7 @@ function AddRecordForm({ addRecordBook, addRecordDate, addRecordStartPage, setAd
           기록
         </Button>
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
