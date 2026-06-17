@@ -67,7 +67,7 @@ function AddRecordForm({ addRecordBook, addRecordDate, addRecordStartPage, setAd
     <KeyboardAvoidingView
       style={arStyles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={insets.top + 52}
+      keyboardVerticalOffset={0}
     >
       <ScrollView
         style={arStyles.fields}
