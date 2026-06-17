@@ -247,6 +247,28 @@ export default function App() {
     });
   }, [readingBooks.map(b => `${b.isbn}:${b.totalPages}`).join(',')]);
 
+  // coverImage가 없는 책은 API에서 가져와서 업데이트
+  React.useEffect(() => {
+    const missingCovers = readingBooks.filter(b => !b.coverImage && b.isbn);
+    if (missingCovers.length === 0) return;
+    missingCovers.forEach(async (book) => {
+      try {
+        const detail = await fetchBookDetail(book.isbn);
+        const coverUrl = detail?.cover ? detail.cover.replace(/^http:\/\//, 'https://') : null;
+        if (coverUrl) {
+          setReadingBooks(prev => prev.map(b =>
+            String(b.isbn) === String(book.isbn) && !b.coverImage
+              ? { ...b, coverImage: coverUrl }
+              : b
+          ));
+          if (currentUser?.id) {
+            setUserBook(currentUser.id, String(book.isbn), { coverImage: coverUrl }).catch(() => {});
+          }
+        }
+      } catch {}
+    });
+  }, [readingBooks.map(b => `${b.isbn}:${b.coverImage || ''}`).join(',')]);
+
   // Save reading books to AsyncStorage whenever it changes
   React.useEffect(() => {
     const saveReadingBooks = async () => {
