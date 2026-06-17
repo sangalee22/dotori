@@ -61,6 +61,8 @@ export default function RecordDetailModal({ visible, onClose, record, book, read
   React.useEffect(() => {
     setFetchedCover(null);
     setFetchedTitle(null);
+    setVariant('light');
+    setCustomCardBg(null);
     const isbn = record?.isbn;
     if (!isbn) return;
     const hasCover = record?.cover || book?.coverImage;
