@@ -27,6 +27,7 @@ import WithdrawModal from '../components/WithdrawModal';
 import Svg, { Path, Circle, G } from 'react-native-svg';
 import { formatTimeAgo } from '../utils/formatTimeAgo';
 import { useToast } from '../contexts/ToastContext';
+import * as Updates from 'expo-updates';
 
 function KakaoIcon() {
   return (
@@ -463,6 +464,12 @@ export default function MyScreen({ reviews = [], currentUser, readingRecords = [
               <View style={styles.settingRow}>
                 <Text style={styles.settingRowLabel}>버전 정보</Text>
                 <Text style={styles.settingRowValue}>1.0.0</Text>
+              </View>
+              <View style={styles.settingRow}>
+                <Text style={styles.settingRowLabel}>OTA 업데이트</Text>
+                <Text style={[styles.settingRowValue, { fontSize: 11 }]} numberOfLines={1}>
+                  {Updates.isEmbeddedLaunch ? '기본 번들' : (Updates.updateId?.slice(-8) ?? '-')}
+                </Text>
               </View>
               <TouchableOpacity style={styles.settingRow} activeOpacity={0.7} onPress={() => setSelectedTerm('service')}>
                 <Text style={styles.settingRowLabel}>이용약관</Text>
