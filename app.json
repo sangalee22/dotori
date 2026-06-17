@@ -78,6 +78,7 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      "expo-updates",
       "expo-web-browser",
       "expo-apple-authentication",
       [
