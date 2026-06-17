@@ -261,27 +261,29 @@ export default function App() {
     });
   }, [readingBooks.map(b => `${b.isbn}:${b.totalPages}`).join(',')]);
 
-  // coverImage가 없는 책은 API에서 가져와서 업데이트
+  // coverImage나 title이 없는 책은 API에서 가져와서 업데이트
   React.useEffect(() => {
-    const missingCovers = readingBooks.filter(b => !b.coverImage && b.isbn);
-    if (missingCovers.length === 0) return;
-    missingCovers.forEach(async (book) => {
+    const missingData = readingBooks.filter(b => (!b.coverImage || !b.title) && b.isbn);
+    if (missingData.length === 0) return;
+    missingData.forEach(async (book) => {
       try {
         const detail = await fetchBookDetail(book.isbn);
-        const coverUrl = detail?.cover ? detail.cover.replace(/^http:\/\//, 'https://') : null;
-        if (coverUrl) {
-          setReadingBooks(prev => prev.map(b =>
-            String(b.isbn) === String(book.isbn) && !b.coverImage
-              ? { ...b, coverImage: coverUrl }
-              : b
-          ));
-          if (currentUser?.id) {
-            setUserBook(currentUser.id, String(book.isbn), { coverImage: coverUrl }).catch(() => {});
-          }
+        const updates = {};
+        if (!book.coverImage) {
+          const coverUrl = detail?.cover ? detail.cover.replace(/^http:\/\//, 'https://') : null;
+          if (coverUrl) updates.coverImage = coverUrl;
+        }
+        if (!book.title && detail?.title) updates.title = detail.title;
+        if (Object.keys(updates).length === 0) return;
+        setReadingBooks(prev => prev.map(b =>
+          String(b.isbn) === String(book.isbn) ? { ...b, ...updates } : b
+        ));
+        if (currentUser?.id) {
+          setUserBook(currentUser.id, String(book.isbn), updates).catch(() => {});
         }
       } catch {}
     });
-  }, [readingBooks.map(b => `${b.isbn}:${b.coverImage || ''}`).join(',')]);
+  }, [readingBooks.map(b => `${b.isbn}:${b.coverImage || ''}:${b.title || ''}`).join(',')]);
 
   // Save reading books to AsyncStorage whenever it changes
   React.useEffect(() => {
@@ -683,9 +685,9 @@ export default function App() {
     if (currentUser?.id) {
       const status = updatedBook.isCompleted ? 'completed' : 'reading';
       setUserBook(currentUser.id, String(book.isbn), {
-        title: updatedBook.title || book.title,
-        author: updatedBook.author || book.author,
-        coverImage: updatedBook.coverImage || book.coverImage || null,
+        title: updatedBook.title || book.title || undefined,
+        author: updatedBook.author || book.author || undefined,
+        coverImage: updatedBook.coverImage || book.coverImage || undefined,
         status,
         currentPage: updatedBook.currentPage ?? 0,
         totalPages: updatedBook.totalPages ?? 0,

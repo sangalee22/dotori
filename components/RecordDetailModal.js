@@ -16,6 +16,7 @@ import { fetchBookDetail } from '../services/aladinApi';
 export default function RecordDetailModal({ visible, onClose, record, book, readingDays = 1, onDelete, onEdit, onComplete, isLatestRecord = true, hideTime = false }) {
   const insets = useSafeAreaInsets();
   const [fetchedCover, setFetchedCover] = React.useState(null);
+  const [fetchedTitle, setFetchedTitle] = React.useState(null);
   const [variant, setVariant] = React.useState('light');
   const [showBookInfo, setShowBookInfo] = React.useState(true);
   const [resultAreaSize, setResultAreaSize] = React.useState({ width: 0, height: 0 });
@@ -59,21 +60,28 @@ export default function RecordDetailModal({ visible, onClose, record, book, read
 
   React.useEffect(() => {
     setFetchedCover(null);
+    setFetchedTitle(null);
     const isbn = record?.isbn;
-    if (!isbn || record?.cover || book?.coverImage) return;
+    if (!isbn) return;
+    const hasCover = record?.cover || book?.coverImage;
+    const hasTitle = record?.title || book?.title;
+    if (hasCover && hasTitle) return;
     fetchBookDetail(isbn)
       .then(detail => {
-        const url = detail?.cover ? detail.cover.replace(/^http:\/\//, 'https://') : null;
-        if (url) setFetchedCover(url);
+        if (!hasCover) {
+          const url = detail?.cover ? detail.cover.replace(/^http:\/\//, 'https://') : null;
+          if (url) setFetchedCover(url);
+        }
+        if (!hasTitle && detail?.title) setFetchedTitle(detail.title);
       })
       .catch(() => {});
   }, [record?.isbn]);
 
   const bookData = React.useMemo(() => ({
-    title: record?.title || book?.title || '',
+    title: record?.title || book?.title || fetchedTitle || '',
     author: book?.author || record?.author || '',
     coverImage: record?.cover || book?.coverImage || fetchedCover || '',
-  }), [record, book, fetchedCover]);
+  }), [record, book, fetchedCover, fetchedTitle]);
 
   const endTime = record?.createdAt ? new Date(record.createdAt) : new Date();
   const startTime = hideTime ? null : (record?.duration ? new Date(endTime - record.duration * 1000) : endTime);
