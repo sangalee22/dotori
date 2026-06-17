@@ -24,7 +24,7 @@
       "url": "https://u.expo.dev/0e3b3a29-1e25-44e8-b071-428b692c6d54",
       "enabled": true,
       "checkAutomatically": "ON_LOAD",
-      "fallbackToCacheTimeout": 10000
+      "fallbackToCacheTimeout": 0
     },
     "runtimeVersion": "1.0.0",
     "ios": {
@@ -76,7 +76,6 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-updates",
       "expo-web-browser",
       "expo-apple-authentication",
       [
