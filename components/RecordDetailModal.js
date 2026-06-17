@@ -56,9 +56,9 @@ export default function RecordDetailModal({ visible, onClose, record, book, read
   };
 
   const bookData = React.useMemo(() => ({
-    title: record?.title ?? '',
-    author: book?.author ?? '',
-    coverImage: record?.cover ?? '',
+    title: record?.title || book?.title || '',
+    author: book?.author || record?.author || '',
+    coverImage: record?.cover || book?.coverImage || '',
   }), [record, book]);
 
   const endTime = record?.createdAt ? new Date(record.createdAt) : new Date();
