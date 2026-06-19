@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, View, Text, StyleSheet, Pressable, Animated, PanResponder, TouchableOpacity } from 'react-native';
+import { Modal, View, Text, StyleSheet, Pressable, Animated, PanResponder, TouchableOpacity, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Spacing, Typography } from '../styles';
 import DefaultHeader from './DefaultHeader';
@@ -10,7 +10,9 @@ import Button from './Button';
 import ModalPopup from './ModalPopup';
 import CloseIcon from './CloseIcon';
 import RecordEditModal from './RecordEditModal';
+import Toast from './Toast';
 import { pickImageFromLibrary, takePhoto as takePhotoUtil } from '../utils/pickImage';
+import { saveCardImage } from '../utils/imageSave';
 import { fetchBookDetail } from '../services/aladinApi';
 
 export default function RecordDetailModal({ visible, onClose, record, book, readingDays = 1, onDelete, onEdit, onComplete, isLatestRecord = true, hideTime = false }) {
@@ -25,6 +27,26 @@ export default function RecordDetailModal({ visible, onClose, record, book, read
   const [customCardBg, setCustomCardBg] = React.useState(null);
   const [isCardMenuVisible, setIsCardMenuVisible] = React.useState(false);
   const cardMenuTranslateY = React.useRef(new Animated.Value(300)).current;
+
+  const cardCaptureRef = React.useRef(null);
+  const [toast, setToast] = React.useState({ visible: false, message: '', requestId: 0 });
+  const toastTimerRef = React.useRef(null);
+
+  const showToast = (message) => {
+    clearTimeout(toastTimerRef.current);
+    setToast(prev => ({ visible: true, message, requestId: prev.requestId + 1 }));
+    toastTimerRef.current = setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 2000);
+  };
+
+  const handleSaveImage = async () => {
+    if (Platform.OS === 'web') { showToast('이미지 저장은 모바일 앱에서 지원돼요.'); return; }
+    try {
+      const success = await saveCardImage(cardCaptureRef);
+      if (success) showToast('이미지가 저장되었어요.');
+    } catch {
+      showToast('이미지 저장에 실패했어요.');
+    }
+  };
 
   const cardMenuPanResponder = React.useRef(
     PanResponder.create({
@@ -106,6 +128,29 @@ export default function RecordDetailModal({ visible, onClose, record, book, read
           topInset={insets.top}
         />
 
+        {/* 캡처용 off-screen 카드 — 화면 밖에 원본 사이즈로 렌더링 */}
+        <View
+          ref={cardCaptureRef}
+          collapsable={false}
+          style={{ position: 'absolute', left: -(CARD_WIDTH + 10), top: 0, width: CARD_WIDTH, height: CARD_HEIGHT }}
+        >
+          <ReadingResultCard
+            variant={variant}
+            book={bookData}
+            elapsed={record?.duration ?? 0}
+            startTime={startTime}
+            endTime={endTime}
+            startPage={record?.startPage ?? 0}
+            endPage={record?.endPage ?? 0}
+            totalPages={record?.totalPages ?? book?.totalPages ?? 0}
+            readingDays={readingDays}
+            displayScale={1}
+            showBookInfo={showBookInfo}
+            customBackground={customCardBg}
+            dateOnly={hideTime}
+          />
+        </View>
+
         <View style={[styles.body, { paddingTop: insets.top + 52 }]}>
           {/* 카드 영역 - 나머지 공간 전부 */}
           <View
@@ -181,7 +226,7 @@ export default function RecordDetailModal({ visible, onClose, record, book, read
               <Button variant="outline" size="xxlarge" style={styles.halfButton} onPress={() => setEditVisible(true)}>
                 기록 수정
               </Button>
-              <Button variant="primary" size="xxlarge" style={styles.halfButton}>
+              <Button variant="primary" size="xxlarge" style={styles.halfButton} onPress={handleSaveImage}>
                 이미지 저장
               </Button>
             </View>
@@ -201,6 +246,8 @@ export default function RecordDetailModal({ visible, onClose, record, book, read
         onSecondaryPress={() => setDeleteConfirmVisible(false)}
         onClose={() => setDeleteConfirmVisible(false)}
       />
+
+      <Toast visible={toast.visible} message={toast.message} requestId={toast.requestId} />
 
       <RecordEditModal
         visible={editVisible}
