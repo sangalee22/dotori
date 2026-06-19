@@ -144,7 +144,7 @@ export default function RecordDetailModal({ visible, onClose, record, book, read
             endPage={record?.endPage ?? 0}
             totalPages={record?.totalPages ?? book?.totalPages ?? 0}
             readingDays={readingDays}
-            displayScale={1}
+            displayScale={previewScale}
             showBookInfo={showBookInfo}
             customBackground={customCardBg}
             dateOnly={hideTime}
