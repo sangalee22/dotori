@@ -16,7 +16,7 @@ const HEADER_HEIGHT = 60;
  * FeedScreen (피드)
  * 모든 사용자의 독서 피드 게시물이 보여지는 화면
  */
-export default function DotoriRoomListScreen({ reviews = [], currentUser, activeTab = 'all', readingBooks = [], bookCache = {}, onBookCacheUpdate, onBookPress, onScroll, onRefresh, onUpdateBookInfo, onToggleLike, onEditReview, onDeleteReview, scrollRef, refreshTrigger }) {
+export default function DotoriRoomListScreen({ reviews = [], currentUser, activeTab = 'all', readingBooks = [], bookCache = {}, onBookCacheUpdate, onBookPress, onScroll, onRefresh, onUpdateBookInfo, onToggleLike, onEditReview, onDeleteReview, onBlock, blockedUserIds = [], scrollRef, refreshTrigger }) {
   const insets = useSafeAreaInsets();
   const { showToast } = useToast();
   const [refreshing, setRefreshing] = React.useState(false);
@@ -46,6 +46,7 @@ export default function DotoriRoomListScreen({ reviews = [], currentUser, active
   }, [onScroll]);
 
   const filtered = [...reviews]
+    .filter(r => !blockedUserIds.includes(r.userId))
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
   const getBook = (item) => {
@@ -143,6 +144,7 @@ export default function DotoriRoomListScreen({ reviews = [], currentUser, active
                 isSpoiler={item.isSpoiler}
                 isCompleted={item.isCompleted}
                 isMyReview={item.userId === currentUser?.id}
+                reviewUserId={item.userId}
                 showBookInfo={true}
                 book={getBook(item)}
                 currentUser={currentUser}
@@ -161,6 +163,7 @@ export default function DotoriRoomListScreen({ reviews = [], currentUser, active
                     showToast('삭제에 실패했어요. 다시 시도해주세요.');
                   }
                 } : undefined}
+                onBlock={onBlock}
               />
               );
             })}

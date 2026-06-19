@@ -62,7 +62,8 @@ export default function LoginScreen({ onLogin, onSignUp }) {
     if (googleResponse.type === 'success') {
       const idToken = googleResponse.authentication?.idToken;
       handleGoogleLoginNative(idToken);
-    } else if (googleResponse.type === 'error' || googleResponse.type === 'dismiss') {
+    } else {
+      // cancel / dismiss / error / locked 모두 로딩 해제
       setIsLoading(false);
     }
   }, [googleResponse]);

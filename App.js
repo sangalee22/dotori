@@ -28,15 +28,18 @@ import DotoriRoomListScreen from './screens/DotoriRoomListScreen';
 import DotoriRoomScreen from './screens/DotoriRoomScreen';
 import MyScreen from './screens/MyScreen';
 import ModalPopup from './components/ModalPopup';
+import AdPopup from './components/AdPopup';
+import ProfileEditScreen from './components/ProfileEditScreen';
 import { registerUser, logout as firebaseLogout, withdrawUser, onAuthChange } from './services/auth';
 import useAppOpenAd from './hooks/useAppOpenAd';
-import { getUser, getUserBooks, getReadingRecords, addReadingRecord, deleteReadingRecord, updateReadingRecord, getReviews, addReview, updateReview, deleteReview, toggleReviewLike, setUserBook, removeUserBook, updateReviewsBookInfo, getBookReaderCount } from './services/firestore';
+import { getUser, getUserBooks, getReadingRecords, addReadingRecord, deleteReadingRecord, updateReadingRecord, getReviews, addReview, updateReview, deleteReview, toggleReviewLike, setUserBook, removeUserBook, updateReviewsBookInfo, getBookReaderCount, getBlockedUserIds, blockUser } from './services/firestore';
 import { storage, auth } from './services/firebase';
 import { ref, uploadBytes, getDownloadURL, deleteObject, listAll } from 'firebase/storage';
 import { signInAnonymously } from 'firebase/auth';
 import { Colors, Typography, FontWeights } from './styles';
 import { Spacing, BorderRadius } from './styles/spacing';
 import { fetchBestsellers, fetchNewBooks, fetchBookDetail, searchBooks, cleanAuthorName, CATEGORY_LIST } from './services/aladinApi';
+import { resizeImage } from './utils/pickImage';
 import { formatTimeAgo } from './utils/formatTimeAgo';
 
 // 웹에서 Min Sans 폰트 로드
@@ -77,10 +80,25 @@ export default function App() {
   const [bestReviews, setBestReviews] = React.useState([]);
   const [activeBottomTab, setActiveBottomTab] = React.useState('home');
   const [showMySettings, setShowMySettings] = React.useState(false);
+  const [showProfileEdit, setShowProfileEdit] = React.useState(false);
+  const profileEditSlide = React.useRef(new Animated.Value(500)).current;
+  const [showAdPopup, setShowAdPopup] = React.useState(false);
+  const adPopupCheckedRef = React.useRef(false);
   const [feedTab, setFeedTab] = React.useState('all'); // 'all' | 'mine'
   const logoHeightAnim = React.useRef(new Animated.Value(60)).current;
   const lastScrollY = React.useRef(0);
   const logoVisible = React.useRef(true);
+
+  // 스플래시 종료 + 로그인 상태일 때 광고 팝업 (하루 1회)
+  React.useEffect(() => {
+    if (!isLoggedIn || showSplash || adPopupCheckedRef.current || Platform.OS === 'web') return;
+    adPopupCheckedRef.current = true;
+    AsyncStorage.getItem('adPopup_skipDate').then(skipDate => {
+      if (skipDate !== new Date().toDateString()) {
+        setTimeout(() => setShowAdPopup(true), 1500);
+      }
+    }).catch(() => {});
+  }, [isLoggedIn, showSplash]);
 
   // 피드 탭을 벗어나면 로고 복원
   React.useEffect(() => {
@@ -89,6 +107,18 @@ export default function App() {
       Animated.timing(logoHeightAnim, { toValue: 60, duration: 200, useNativeDriver: false }).start();
     }
   }, [activeBottomTab]);
+
+  const handleOpenProfileEdit = () => {
+    profileEditSlide.setValue(windowWidth);
+    setShowProfileEdit(true);
+    Animated.timing(profileEditSlide, { toValue: 0, duration: 280, useNativeDriver: true }).start();
+  };
+
+  const handleCloseProfileEdit = () => {
+    Animated.timing(profileEditSlide, { toValue: windowWidth, duration: 280, useNativeDriver: true }).start(() => {
+      setShowProfileEdit(false);
+    });
+  };
 
   const handleFeedScroll = React.useCallback((e) => {
     const y = e.nativeEvent.contentOffset.y;
@@ -115,6 +145,7 @@ export default function App() {
   const [readingBooks, setReadingBooks] = React.useState([]); // Store books currently being read
   const [wantToReadBooks, setWantToReadBooks] = React.useState([]); // Store books user wants to read
   const [reviews, setReviews] = React.useState([]); // Store all reviews
+  const [blockedUserIds, setBlockedUserIds] = React.useState([]);
   const [bookCache, setBookCache] = React.useState({}); // isbn → {title, author, cover} 전역 캐시
   const [currentUser, setCurrentUser] = React.useState({
     id: 'user_001',
@@ -196,12 +227,36 @@ export default function App() {
   // Clear all recent searches
   const clearAllRecentSearches = () => {
     setRecentSearches([]);
+    AsyncStorage.removeItem('recentSearches').catch(() => {});
   };
 
   // Clear all recent books
   const clearAllRecentBooks = () => {
     setRecentBooks([]);
+    AsyncStorage.removeItem('recentBooks').catch(() => {});
   };
+
+  // Load & save recentBooks
+  React.useEffect(() => {
+    AsyncStorage.getItem('recentBooks').then(stored => {
+      if (stored) setRecentBooks(JSON.parse(stored));
+    }).catch(() => {});
+  }, []);
+
+  React.useEffect(() => {
+    AsyncStorage.setItem('recentBooks', JSON.stringify(recentBooks)).catch(() => {});
+  }, [recentBooks]);
+
+  // Load & save recentSearches
+  React.useEffect(() => {
+    AsyncStorage.getItem('recentSearches').then(stored => {
+      if (stored) setRecentSearches(JSON.parse(stored));
+    }).catch(() => {});
+  }, []);
+
+  React.useEffect(() => {
+    AsyncStorage.setItem('recentSearches', JSON.stringify(recentSearches)).catch(() => {});
+  }, [recentSearches]);
 
   // Load reading books from AsyncStorage
   React.useEffect(() => {
@@ -417,6 +472,7 @@ export default function App() {
               getReadingRecords(firebaseUser.uid),
               getReviews(),
             ]);
+            getBlockedUserIds(firebaseUser.uid).then(ids => setBlockedUserIds(ids)).catch(() => {});
 
             const toHttpsCoverFb = (url) => url?.replace(/^http:\/\//, 'https://') || null;
             const seenFbIsbn = new Set();
@@ -469,7 +525,8 @@ export default function App() {
     const keys = await AsyncStorage.getAllKeys().catch(() => []);
     const dynamicKeys = keys.filter(k => k.startsWith('feedLike_') || k.startsWith('feedRevealed_'));
     await AsyncStorage.multiRemove([
-      'readingBooks', 'wantToReadBooks', 'reviews',
+      'readingBooks', 'wantToReadBooks', 'reviews', 'readingRecords',
+      'recentBooks', 'recentSearches',
       'bookCache', 'timerState', 'timerPendingState',
       ...dynamicKeys,
     ]).catch(() => {});
@@ -689,7 +746,8 @@ export default function App() {
     return await Promise.all(
       images.map(async (uri, index) => {
         if (uri.startsWith('http')) return uri;
-        const response = await fetch(uri);
+        const resizedUri = await resizeImage(uri, { maxWidth: 1056 });
+        const response = await fetch(resizedUri);
         const blob = await response.blob();
         const storageRef = ref(storage, `reviewImages/${userId}/${reviewId}/${index}`);
         await uploadBytes(storageRef, blob);
@@ -792,6 +850,11 @@ export default function App() {
         : r
       )
     );
+  };
+
+  const handleBlockUser = (blockedId) => {
+    setBlockedUserIds(prev => [...prev, blockedId]);
+    blockUser({ blockedId }).catch(() => {});
   };
 
   const activeReadingBooks = readingBooks
@@ -1106,6 +1169,9 @@ export default function App() {
             await clearLocalUserData();
             setReadingBooks([]);
             setWantToReadBooks([]);
+            setReadingRecords([]);
+            setRecentBooks([]);
+            setRecentSearches([]);
             setBookCache({});
             const [userData, fbReviews, fbReadingBooks, fbCompletedBooks, fbWantBooks, fbRecords] = await Promise.all([
               getUser(userInfo.id),
@@ -1144,6 +1210,7 @@ export default function App() {
               AsyncStorage.setItem('readingRecords', JSON.stringify(enriched)).catch(() => {});
             }
             syncPendingRecords(userInfo.id);
+            getBlockedUserIds(auth.currentUser?.uid || userInfo.id).then(ids => setBlockedUserIds(ids)).catch(() => {});
             setIsLoggedIn(true);
           }}
           onSignUp={(userInfo) => {
@@ -1601,7 +1668,7 @@ export default function App() {
           {/* 피드 Screen */}
           <View style={{ flex: 1, display: activeBottomTab === 'dotoriRoom' ? 'flex' : 'none' }}>
             <DotoriRoomListScreen
-              reviews={reviews}
+              reviews={reviews.filter(r => !blockedUserIds.includes(r.userId))}
               currentUser={currentUser}
               activeTab={feedTab}
               readingBooks={readingBooks}
@@ -1635,6 +1702,8 @@ export default function App() {
               }}
               onEditReview={handleOpenEditReviewFromFeed}
               onDeleteReview={handleDeleteReview}
+              blockedUserIds={blockedUserIds}
+              onBlock={handleBlockUser}
             />
           </View>
 
@@ -1680,6 +1749,7 @@ export default function App() {
               currentUser={currentUser}
               readingRecords={readingRecords}
               readingBooks={readingBooks}
+              onOpenProfileEdit={handleOpenProfileEdit}
               onBookPress={(book) => {
                 setSelectedBook(book);
                 setCurrentView('bookDetail');
@@ -1773,6 +1843,22 @@ export default function App() {
         </SafeAreaView>
       </View>
 
+      {/* 광고 팝업 */}
+      <AdPopup visible={showAdPopup} onClose={() => setShowAdPopup(false)} />
+
+      {/* 프로필 편집 overlay — Modal 없는 절대 View (UIViewController 충돌 없음) */}
+      {showProfileEdit && (
+        <ProfileEditScreen
+          currentUser={currentUser}
+          slideAnim={profileEditSlide}
+          onClose={handleCloseProfileEdit}
+          onSave={(updatedData) => {
+            setCurrentUser(prev => ({ ...prev, ...updatedData }));
+            handleCloseProfileEdit();
+          }}
+        />
+      )}
+
       {/* BookDetail overlay */}
       {currentView === 'bookDetail' && selectedBook && (() => {
         // Find if this book is in reading state
@@ -1806,12 +1892,14 @@ export default function App() {
             reviewInitialImages={bookDetailReviewInitialImages}
             targetReviewId={bookDetailTargetReviewId}
             editReviewData={bookDetailEditReview}
-            reviews={reviews}
+            reviews={reviews.filter(r => !blockedUserIds.includes(r.userId))}
             onAddReview={handleAddReview}
             onEditReview={handleEditReview}
             onDeleteReview={handleDeleteReview}
             onToggleLike={handleToggleLike}
             currentUser={currentUser}
+            blockedUserIds={blockedUserIds}
+            onBlock={handleBlockUser}
             initialReadingState={readingBookData ? {
               isReading: true,
               isCompleted: readingBookData.isCompleted || false,

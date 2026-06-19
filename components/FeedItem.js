@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, Modal, Pressable, Dimensions, Animated, PanResponder } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Typography, Spacing, BorderRadius } from '../styles';
@@ -13,6 +14,17 @@ import CloseIcon from './CloseIcon';
 import DefaultHeader from './DefaultHeader';
 import PopupHeader from './PopupHeader';
 import ModalPopup from './ModalPopup';
+import { reportReview } from '../services/firestore';
+import RadioItem from './RadioItem';
+import { useToast } from '../contexts/ToastContext';
+
+const REPORT_REASONS = [
+  '스팸 또는 광고',
+  '욕설 및 혐오 표현',
+  '부적절한 콘텐츠',
+  '개인정보 침해',
+  '기타',
+];
 
 /**
  * FeedItem Component
@@ -29,9 +41,11 @@ import ModalPopup from './ModalPopup';
  * @param {number} comments - Number of comments
  * @param {boolean} isSpoiler - Whether content is revealed (for type='spo')
  * @param {boolean} isMyReview - Whether this review was written by current user
+ * @param {string} reviewUserId - User ID of the review author
  * @param {function} onRevealSpoiler - Callback when spoiler is revealed
  * @param {function} onDelete - Callback when review is deleted
  * @param {function} onEdit - Callback when review is edited
+ * @param {function} onBlock - Callback when a user is blocked
  * @param {object} style - Additional style overrides
  */
 export default function FeedItem({
@@ -48,6 +62,7 @@ export default function FeedItem({
   isSpoiler = true,
   isCompleted = false,
   isMyReview = false,
+  reviewUserId,
   showBookInfo = false,
   book,
   currentUser,
@@ -56,14 +71,19 @@ export default function FeedItem({
   onRevealSpoiler,
   onDelete,
   onEdit,
+  onBlock,
   style,
 }) {
+  const { showToast } = useToast();
   const likeArray = Array.isArray(likes) ? likes : [];
   const [isLiked, setIsLiked] = React.useState(() => !!currentUser?.id && likeArray.includes(currentUser.id));
   const [likeCount, setLikeCount] = React.useState(likeArray.length);
   const [isRevealed, setIsRevealed] = React.useState(false);
   const [isMoreModalVisible, setIsMoreModalVisible] = React.useState(false);
   const [isDeleteConfirmVisible, setIsDeleteConfirmVisible] = React.useState(false);
+  const [isBlockConfirmVisible, setIsBlockConfirmVisible] = React.useState(false);
+  const [isReportVisible, setIsReportVisible] = React.useState(false);
+  const [selectedReason, setSelectedReason] = React.useState(null);
 const [isImageViewerVisible, setIsImageViewerVisible] = React.useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = React.useState(0);
   const insets = useSafeAreaInsets();
@@ -210,6 +230,38 @@ const [isImageViewerVisible, setIsImageViewerVisible] = React.useState(false);
     setIsDeleteConfirmVisible(false);
   };
 
+  const handleBlockPress = () => {
+    handleCloseMoreModal();
+    setTimeout(() => {
+      setIsBlockConfirmVisible(true);
+    }, 300);
+  };
+
+  const handleConfirmBlock = () => {
+    setIsBlockConfirmVisible(false);
+    showToast('해당 유저를 차단했습니다.');
+    if (onBlock) onBlock(reviewUserId);
+  };
+
+  const handleReportPress = () => {
+    handleCloseMoreModal();
+    setTimeout(() => {
+      setSelectedReason(null);
+      setIsReportVisible(true);
+    }, 300);
+  };
+
+  const handleConfirmReport = () => {
+    if (!selectedReason) return;
+    setIsReportVisible(false);
+    showToast('정상 신고되었습니다.');
+    reportReview({
+      reviewId: id,
+      reportedUserId: reviewUserId,
+      reason: selectedReason,
+    }).catch(() => {});
+  };
+
   const handleImagePress = (index) => {
     setSelectedImageIndex(index);
     setIsImageViewerVisible(true);
@@ -268,10 +320,11 @@ const [isImageViewerVisible, setIsImageViewerVisible] = React.useState(false);
           >
             <View style={styles.bookCover}>
               {book.cover ? (
-                <Image
+                <ExpoImage
                   source={{ uri: book.cover }}
                   style={{ width: '100%', height: '100%' }}
-                  resizeMode="cover"
+                  contentFit="cover"
+                  cachePolicy="memory-disk"
                 />
               ) : (
                 <View style={[{ width: '100%', height: '100%' }, styles.bookCoverPlaceholder]} />
@@ -314,10 +367,11 @@ const [isImageViewerVisible, setIsImageViewerVisible] = React.useState(false);
                     activeOpacity={0.9}
                     onPress={() => handleImagePress(0)}
                   >
-                    <Image
+                    <ExpoImage
                       source={typeof images[0] === 'string' ? { uri: images[0] } : images[0]}
                       style={styles.feedImageSingle}
-                      resizeMode="cover"
+                      contentFit="cover"
+                      cachePolicy="memory-disk"
                     />
                   </TouchableOpacity>
                 ) : (
@@ -334,10 +388,11 @@ const [isImageViewerVisible, setIsImageViewerVisible] = React.useState(false);
                         activeOpacity={0.9}
                         onPress={() => handleImagePress(index)}
                       >
-                        <Image
+                        <ExpoImage
                           source={typeof image === 'string' ? { uri: image } : image}
                           style={styles.feedImage}
-                          resizeMode="cover"
+                          contentFit="cover"
+                          cachePolicy="memory-disk"
                         />
                       </TouchableOpacity>
                     ))}
@@ -388,11 +443,9 @@ const [isImageViewerVisible, setIsImageViewerVisible] = React.useState(false);
           </TouchableOpacity>
           */}
         </View>
-        {isMyReview && (
-          <IconButton size={36} onPress={handleOpenMoreModal}>
-            <MoreIcon color={Colors.gray800} />
-          </IconButton>
-        )}
+        <IconButton size={36} onPress={handleOpenMoreModal}>
+          <MoreIcon color={Colors.gray800} />
+        </IconButton>
       </View>
     </View>
 
@@ -419,12 +472,25 @@ const [isImageViewerVisible, setIsImageViewerVisible] = React.useState(false);
               </View>
               <View style={styles.moreModalBody}>
                 <View style={styles.moreOptionBox}>
-                  <TouchableOpacity style={styles.optionItem} onPress={handleEditPress}>
-                    <Text style={styles.optionText}>수정</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.optionItem} onPress={handleDeletePress}>
-                    <Text style={styles.optionText}>삭제</Text>
-                  </TouchableOpacity>
+                  {isMyReview ? (
+                    <>
+                      <TouchableOpacity style={styles.optionItem} onPress={handleEditPress}>
+                        <Text style={styles.optionText}>수정</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.optionItem} onPress={handleDeletePress}>
+                        <Text style={styles.optionText}>삭제</Text>
+                      </TouchableOpacity>
+                    </>
+                  ) : (
+                    <>
+                      <TouchableOpacity style={styles.optionItem} onPress={handleReportPress}>
+                        <Text style={styles.optionText}>신고</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.optionItem} onPress={handleBlockPress}>
+                        <Text style={styles.optionText}>유저 차단</Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
                 </View>
               </View>
             </Pressable>
@@ -444,6 +510,42 @@ const [isImageViewerVisible, setIsImageViewerVisible] = React.useState(false);
       onSecondaryPress={handleCancelDelete}
       onClose={handleCancelDelete}
     />
+
+    {/* Block Confirmation Modal */}
+    <ModalPopup
+      visible={isBlockConfirmVisible}
+      title="유저를 차단할까요?"
+      description="차단은 취소할 수 없습니다."
+      primaryButtonText="차단"
+      secondaryButtonText="취소"
+      onPrimaryPress={handleConfirmBlock}
+      onSecondaryPress={() => setIsBlockConfirmVisible(false)}
+      onClose={() => setIsBlockConfirmVisible(false)}
+    />
+
+    {/* Report Modal */}
+    <ModalPopup
+      visible={isReportVisible}
+      title="신고할까요?"
+      description="신고 사유를 선택해주세요."
+      primaryButtonText="신고"
+      secondaryButtonText="취소"
+      primaryButtonDisabled={!selectedReason}
+      onPrimaryPress={handleConfirmReport}
+      onSecondaryPress={() => setIsReportVisible(false)}
+      onClose={() => setIsReportVisible(false)}
+    >
+      <View style={styles.reportReasonList}>
+        {REPORT_REASONS.map((reason) => (
+          <RadioItem
+            key={reason}
+            label={reason}
+            selected={selectedReason === reason}
+            onPress={() => setSelectedReason(reason)}
+          />
+        ))}
+      </View>
+    </ModalPopup>
 
 
 {/* Image Viewer Modal */}
@@ -476,10 +578,11 @@ const [isImageViewerVisible, setIsImageViewerVisible] = React.useState(false);
           >
             {images.map((image, index) => (
               <View key={index} style={styles.imageViewerPage}>
-                <Image
+                <ExpoImage
                   source={typeof image === 'string' ? { uri: image } : image}
                   style={styles.imageViewerImage}
-                  resizeMode="contain"
+                  contentFit="contain"
+                  cachePolicy="memory-disk"
                 />
               </View>
             ))}
@@ -695,6 +798,11 @@ const styles = StyleSheet.create({
   optionText: {
     ...Typography.body1Medium,
     color: Colors.gray900,
+  },
+
+  // Report Modal
+  reportReasonList: {
+    width: '100%',
   },
 
   // Image Viewer Styles

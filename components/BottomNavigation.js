@@ -3,7 +3,7 @@ import { View, Text, Image, TouchableOpacity, StyleSheet, Modal, ScrollView, Key
 import { BlurView } from 'expo-blur';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { saveCardImage, captureCard } from '../utils/imageSave';
-import { pickImageFromLibrary, takePhoto as takePhotoUtil } from '../utils/pickImage';
+import { pickImageFromLibrary, takePhoto as takePhotoUtil, resizeImage } from '../utils/pickImage';
 import { useSinglePress } from '../utils/useSinglePress';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Typography, BorderRadius, Spacing } from '../styles';
@@ -269,15 +269,17 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
   };
 
   const handlePickFromAlbum = () => {
-    pickImageFromLibrary((uri) => {
-      setCustomCardBg(uri);
+    pickImageFromLibrary(async (uri) => {
+      const resized = await resizeImage(uri, { maxWidth: 1056 });
+      setCustomCardBg(resized);
       closeCardMenu();
     });
   };
 
   const handleTakePhoto = () => {
-    takePhotoUtil((uri) => {
-      setCustomCardBg(uri);
+    takePhotoUtil(async (uri) => {
+      const resized = await resizeImage(uri, { maxWidth: 1056 });
+      setCustomCardBg(resized);
       closeCardMenu();
     });
   };
@@ -384,13 +386,11 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
 
   React.useEffect(() => {
     if (isPlaying && !isPauseModalVisible) {
-      // 세션 시작 — 현재 시각 기록
       sessionStartTsRef.current = Date.now();
       timerRef.current = setInterval(() => setElapsed(getCurrentElapsed()), 1000);
-      // 재생 시작 시 pending state 제거 (복원 후 재개 또는 새 세션)
       AsyncStorage.removeItem('timerPendingState').catch(() => {});
-      // AsyncStorage에 상태 저장 (앱 종료 후 복원용)
       AsyncStorage.setItem('timerState', JSON.stringify({
+        isPlaying: true,
         sessionStartTs: sessionStartTsRef.current,
         elapsedBase: elapsedBaseRef.current,
         selectedBook,
@@ -399,28 +399,46 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
       })).catch(() => {});
     } else {
       clearInterval(timerRef.current);
-      // 일시정지 — 누적 시간 저장
       if (sessionStartTsRef.current) {
         elapsedBaseRef.current = getCurrentElapsed();
         sessionStartTsRef.current = null;
         setElapsed(elapsedBaseRef.current);
       }
-      if (!isPlaying) {
-        AsyncStorage.removeItem('timerState').catch(() => {});
+      // 일시정지 상태(elapsed > 0)도 timerState에 저장 — 앱 종료 후 복원용
+      // removeItem은 하지 않음. 명시적 정지(handleCloseModal)에서만 삭제.
+      if (!isPlaying && elapsedBaseRef.current > 0) {
+        AsyncStorage.setItem('timerState', JSON.stringify({
+          isPlaying: false,
+          sessionStartTs: null,
+          elapsedBase: elapsedBaseRef.current,
+          selectedBook,
+          readingStartPage,
+          readingStartTime: readingStartTime?.toISOString() ?? null,
+        })).catch(() => {});
       }
     }
     return () => clearInterval(timerRef.current);
   }, [isPlaying, isPauseModalVisible]);
 
-  // 앱 포그라운드 복귀 시 경과 시간 재계산
+  // 앱 백그라운드 전환 시 timerState 저장 + 포그라운드 복귀 시 경과 시간 재계산
   React.useEffect(() => {
     const sub = AppState.addEventListener('change', (next) => {
-      if (next === 'active' && isPlaying && sessionStartTsRef.current) {
+      if ((next === 'background' || next === 'inactive') && isPlaying && sessionStartTsRef.current) {
+        // 강제 종료 직전 최신 상태 저장
+        AsyncStorage.setItem('timerState', JSON.stringify({
+          isPlaying: true,
+          sessionStartTs: sessionStartTsRef.current,
+          elapsedBase: elapsedBaseRef.current,
+          selectedBook: timerBook,
+          readingStartPage,
+          readingStartTime: readingStartTime?.toISOString() ?? null,
+        })).catch(() => {});
+      } else if (next === 'active' && isPlaying && sessionStartTsRef.current) {
         setElapsed(getCurrentElapsed());
       }
     });
     return () => sub.remove();
-  }, [isPlaying, getCurrentElapsed]);
+  }, [isPlaying, getCurrentElapsed, timerBook, readingStartPage, readingStartTime]);
 
   // 앱 재시작 시 타이머 상태 복원
   React.useEffect(() => {
@@ -450,18 +468,25 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
           // isPlaying은 false 유지 → elapsed > 0이므로 타이머 일시정지 UI 표시
           return;
         }
-        // 진행 중이던 타이머 상태 복원
+        // 진행 중이거나 일시정지 상태였던 타이머 복원
         const stored = await AsyncStorage.getItem('timerState');
         if (!stored) return;
-        const { sessionStartTs, elapsedBase, selectedBook: savedBook, readingStartPage: savedStartPage, readingStartTime: savedStartTime } = JSON.parse(stored);
-        const restored = elapsedBase + Math.floor((Date.now() - sessionStartTs) / 1000);
-        elapsedBaseRef.current = restored;
-        sessionStartTsRef.current = null;
-        setElapsed(restored);
+        const { isPlaying: wasPlaying, sessionStartTs, elapsedBase, selectedBook: savedBook, readingStartPage: savedStartPage, readingStartTime: savedStartTime } = JSON.parse(stored);
         if (savedBook) { setSelectedBook(savedBook); setTimerBook(savedBook); }
         if (savedStartPage !== undefined) setReadingStartPage(savedStartPage);
         if (savedStartTime) setReadingStartTime(new Date(savedStartTime));
-        setIsPlaying(true);
+        if ((wasPlaying || (wasPlaying === undefined && sessionStartTs)) && sessionStartTs) {
+          // 실행 중이었던 경우 → 종료된 동안 경과 시간 포함해 재개
+          const restored = elapsedBase + Math.floor((Date.now() - sessionStartTs) / 1000);
+          elapsedBaseRef.current = restored;
+          setElapsed(restored);
+          setIsPlaying(true);
+        } else {
+          // 일시정지 상태였던 경우 → 일시정지 UI로 복원
+          elapsedBaseRef.current = elapsedBase ?? 0;
+          setElapsed(elapsedBase ?? 0);
+          // isPlaying은 false 유지 → elapsed > 0이므로 일시정지 UI 표시
+        }
       } catch {}
     };
     restore();

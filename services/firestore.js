@@ -2,7 +2,7 @@ import {
   collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc,
   query, where, orderBy, limit, onSnapshot, increment, arrayUnion, arrayRemove, serverTimestamp,
 } from 'firebase/firestore';
-import { db } from './firebase';
+import { db, auth } from './firebase';
 
 // ─── Users ───────────────────────────────────────────────────────────────────
 
@@ -174,6 +174,36 @@ export async function toggleReviewLike(reviewId, userId) {
   } else {
     await updateDoc(ref, { likes: arrayUnion(userId) });
   }
+}
+
+// ─── Reports & Blocks ─────────────────────────────────────────────────────────
+
+export async function reportReview({ reviewId, reportedUserId, reason }) {
+  const uid = auth.currentUser?.uid;
+  if (!uid) return;
+  await addDoc(collection(db, 'reports'), {
+    reporter_id: uid,
+    review_id: reviewId,
+    reported_user_id: reportedUserId,
+    reason,
+    created_at: serverTimestamp(),
+  });
+}
+
+export async function blockUser({ blockedId }) {
+  const uid = auth.currentUser?.uid;
+  if (!uid) return;
+  await addDoc(collection(db, 'blocks'), {
+    blocker_id: uid,
+    blocked_id: blockedId,
+    created_at: serverTimestamp(),
+  });
+}
+
+export async function getBlockedUserIds(userId) {
+  const q = query(collection(db, 'blocks'), where('blocker_id', '==', userId));
+  const snap = await getDocs(q);
+  return snap.docs.map(d => d.data().blocked_id);
 }
 
 // ─── Rooms ────────────────────────────────────────────────────────────────────

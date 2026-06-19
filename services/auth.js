@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { GoogleAuthProvider, OAuthProvider, signInWithRedirect, getRedirectResult, signInWithCredential, signInAnonymously, signOut, onAuthStateChanged } from 'firebase/auth';
+import { GoogleAuthProvider, OAuthProvider, signInWithRedirect, getRedirectResult, signInWithCredential, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
 import { ref, deleteObject, listAll } from 'firebase/storage';
 import { storage } from './firebase';
 import * as WebBrowser from 'expo-web-browser';
@@ -13,6 +13,33 @@ WebBrowser.maybeCompleteAuthSession();
 
 const KAKAO_REST_KEY = '2b5d49a5425814b1d77004161b404e35';
 const googleProvider = new GoogleAuthProvider();
+
+// ─── 카카오 전용 Firebase 계정 생성/로그인 ────────────────────────────────────
+// 카카오는 Firebase 공식 제공자가 아니므로 kakaoId 기반 이메일/비밀번호 계정으로
+// 안정적인 Firebase UID를 확보한다. 기기가 바뀌어도 같은 UID로 로그인 가능.
+
+async function signInOrCreateKakaoFirebaseAccount(kakaoNumericId) {
+  const email = `kakao.${kakaoNumericId}@dotori-auth.app`;
+  const password = `Dotori_${kakaoNumericId}_2024`;
+  try {
+    const result = await signInWithEmailAndPassword(auth, email, password);
+    return result.user;
+  } catch (e) {
+    if (['auth/user-not-found', 'auth/invalid-credential', 'auth/wrong-password'].includes(e.code)) {
+      try {
+        const result = await createUserWithEmailAndPassword(auth, email, password);
+        return result.user;
+      } catch (createErr) {
+        if (createErr.code === 'auth/email-already-in-use') {
+          const result = await signInWithEmailAndPassword(auth, email, password);
+          return result.user;
+        }
+        throw createErr;
+      }
+    }
+    throw e;
+  }
+}
 
 // ─── Web: 팝업 + REST API ─────────────────────────────────────────────────────
 
@@ -37,18 +64,18 @@ async function exchangeKakaoCode(code, redirectUri) {
   if (userData.code < 0) throw new Error(`사용자 정보 조회 실패 (${userData.code})`);
 
 
-  const kakaoId = `kakao_${userData.id}`;
   const profile = userData.kakao_account?.profile;
+
+  const firebaseUser = await signInOrCreateKakaoFirebaseAccount(userData.id);
   const userInfo = {
-    id: kakaoId,
+    id: firebaseUser.uid,
     provider: 'kakao',
     email: userData.kakao_account?.email || null,
     name: profile?.nickname || null,
     profileImage: profile?.profile_image_url || null,
   };
 
-  if (!auth.currentUser) await signInAnonymously(auth).catch(() => {});
-  const existing = await getUser(kakaoId);
+  const existing = await getUser(firebaseUser.uid);
   const isNewUser = !existing;
   let existingProvider = null;
   if (isNewUser && userInfo.email) {
@@ -106,18 +133,18 @@ async function loginWithKakaoNative() {
   if (!token?.accessToken) throw new Error('카카오 로그인 실패');
 
   const profile = await getProfile();
-  const kakaoId = `kakao_${profile.id}`;
+  await AsyncStorage.setItem('kakao_access_token', token.accessToken);
+
+  const firebaseUser = await signInOrCreateKakaoFirebaseAccount(profile.id);
   const userInfo = {
-    id: kakaoId,
+    id: firebaseUser.uid,
     provider: 'kakao',
     email: profile.email || null,
     name: profile.nickname || null,
     profileImage: profile.profileImageUrl || null,
   };
 
-  await AsyncStorage.setItem('kakao_access_token', token.accessToken);
-  if (!auth.currentUser) await signInAnonymously(auth).catch(() => {});
-  const existing = await getUser(kakaoId);
+  const existing = await getUser(firebaseUser.uid);
   const isNewUser = !existing;
   let existingProvider = null;
   if (isNewUser && userInfo.email) {

@@ -38,7 +38,7 @@ export default function BestBook({
               ? <Image source={{ uri: coverImage }} style={styles.coverImage} />
               : <View style={styles.coverPlaceholder} />}
           </View>
-          <Text style={styles.activeTitle} numberOfLines={2}>{cleanTitle}</Text>
+          <Text style={styles.activeTitle} numberOfLines={2} lineBreakStrategyIOS="hangul-word">{cleanTitle}</Text>
           <Text style={styles.activeAuthor} numberOfLines={1}>{author}</Text>
         </TouchableOpacity>
       );
@@ -52,7 +52,7 @@ export default function BestBook({
             ? <Image source={{ uri: coverImage }} style={styles.coverImage} />
             : <View style={styles.coverPlaceholder} />}
         </View>
-        <Text style={styles.inactiveTitle} numberOfLines={2}>{cleanTitle}</Text>
+        <Text style={styles.inactiveTitle} numberOfLines={2} lineBreakStrategyIOS="hangul-word">{cleanTitle}</Text>
         <Text style={styles.inactiveAuthor} numberOfLines={1}>{author}</Text>
         <BlurView intensity={10} tint="light" style={[StyleSheet.absoluteFill, { height: 310 }]} />
       </TouchableOpacity>
@@ -109,7 +109,7 @@ export default function BestBook({
           !flexibleWidth && (isFirstPlace ? styles.infoLarge : styles.infoMedium),
           flexibleWidth && styles.infoFlexible,
         ]}>
-          <Text style={styles.title} numberOfLines={2} ellipsizeMode="tail">{cleanTitle}</Text>
+          <Text style={styles.title} numberOfLines={2} ellipsizeMode="tail" lineBreakStrategyIOS="hangul-word">{cleanTitle}</Text>
           <Text style={styles.author} numberOfLines={2} ellipsizeMode="tail">{author}</Text>
         </View>
       </View>

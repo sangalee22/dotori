@@ -1,24 +1,16 @@
 import React from 'react';
-import { StyleSheet, View, ScrollView, Text, Modal, Pressable, Animated, PanResponder, TouchableOpacity, Alert } from 'react-native';
+import { StyleSheet, View, ScrollView, Text, Modal, Animated, TouchableOpacity, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as ImagePicker from 'expo-image-picker';
-import { updateUser } from '../services/firestore';
-import { storage, auth } from '../services/firebase';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { signInAnonymously } from 'firebase/auth';
 import { Colors, Spacing, Typography, BorderRadius } from '../styles';
 import UserProfile from '../components/UserProfile';
 import IconButton from '../components/IconButton';
 import EditFillIcon from '../components/EditFillIcon';
-import PopupHeader from '../components/PopupHeader';
 import FeedItem from '../components/FeedItem';
 import SubTab from '../components/SubTab';
 import SimbolOutlineIcon from '../components/SimbolOutlineIcon';
 import SettingIcon from '../components/SettingIcon';
 import FireIcon from '../components/FireIcon';
-import TextField from '../components/TextField';
-import Button from '../components/Button';
 import DefaultHeader from '../components/DefaultHeader';
 import ArrowRightIcon from '../components/ArrowRightIcon';
 import TermsDetailModal from '../components/TermsDetailModal';
@@ -58,22 +50,18 @@ function AppleIcon() {
   );
 }
 
-export default function MyScreen({ reviews = [], currentUser, readingRecords = [], readingBooks = [], onBookPress, showSettings = false, onSettingsClose, onSettingsOpen, onLogout, onWithdraw, onUpdateUser, onEditReview, onDeleteReview, onToggleLike }) {
+export default function MyScreen({ reviews = [], currentUser, readingRecords = [], readingBooks = [], onOpenProfileEdit, onBookPress, showSettings = false, onSettingsClose, onSettingsOpen, onLogout, onWithdraw, onUpdateUser, onEditReview, onDeleteReview, onToggleLike }) {
   const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
   const { showToast } = useToast();
-  const [isProfileModalVisible, setIsProfileModalVisible] = React.useState(false);
-  const profileModalTranslateY = React.useRef(new Animated.Value(300)).current;
-  const [showProfileEdit, setShowProfileEdit] = React.useState(false);
-  const [nicknameInput, setNicknameInput] = React.useState('');
-  const [nicknameError, setNicknameError] = React.useState('');
-  const [isNicknameValid, setIsNicknameValid] = React.useState(false);
+  const settingsSlide = React.useRef(new Animated.Value(400)).current;
   const [selectedTerm, setSelectedTerm] = React.useState(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = React.useState(false);
   const [showWithdraw, setShowWithdraw] = React.useState(false);
-  const [user, setUser] = React.useState({
-    nickname: 'User name',
-    profileImage: null,
-  });
+  const [user, setUser] = React.useState(() => ({
+    nickname: currentUser?.nickname || currentUser?.name || 'User name',
+    profileImage: currentUser?.profileImage || null,
+  }));
 
   React.useEffect(() => {
     loadUserData();
@@ -84,7 +72,7 @@ export default function MyScreen({ reviews = [], currentUser, readingRecords = [
       setUser(prev => ({
         ...prev,
         nickname: currentUser.nickname || currentUser.name || prev.nickname,
-        profileImage: currentUser.profileImage || prev.profileImage,
+        profileImage: currentUser.profileImage !== undefined ? (currentUser.profileImage || null) : prev.profileImage,
       }));
     }
   }, [currentUser]);
@@ -100,130 +88,6 @@ export default function MyScreen({ reviews = [], currentUser, readingRecords = [
         });
       }
     } catch (error) {}
-  };
-
-  const saveUserData = async (updatedUser) => {
-    try {
-      const userData = await AsyncStorage.getItem('currentUser');
-      if (userData) {
-        const parsedUser = JSON.parse(userData);
-        await AsyncStorage.setItem('currentUser', JSON.stringify({ ...parsedUser, profileImage: updatedUser.profileImage }));
-      }
-    } catch (error) {}
-  };
-
-  const profilePanResponder = React.useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 5 && Math.abs(g.dy) > Math.abs(g.dx),
-      onPanResponderMove: (_, g) => { if (g.dy > 0) profileModalTranslateY.setValue(g.dy); },
-      onPanResponderRelease: (_, g) => {
-        if (g.dy > 100) {
-          handleCloseProfileModal();
-        } else {
-          Animated.spring(profileModalTranslateY, { toValue: 0, useNativeDriver: true, tension: 50, friction: 10 }).start();
-        }
-      },
-    })
-  ).current;
-
-  const handleOpenProfileModal = () => {
-    setIsProfileModalVisible(true);
-    Animated.spring(profileModalTranslateY, { toValue: 0, useNativeDriver: true, tension: 50, friction: 10 }).start();
-  };
-
-  const handleCloseProfileModal = () => {
-    Animated.timing(profileModalTranslateY, { toValue: 300, duration: 200, useNativeDriver: true }).start(() => {
-      setIsProfileModalVisible(false);
-    });
-  };
-
-  const handleSelectImage = async () => {
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permissionResult.granted) {
-      Alert.alert('권한 필요', '앨범에 접근하려면 권한이 필요합니다.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 1 });
-    handleCloseProfileModal();
-    if (!result.canceled && result.assets?.length > 0) {
-      const localUri = result.assets[0].uri;
-      try {
-        let profileImage = localUri;
-        if (currentUser?.id) {
-          if (!auth.currentUser) await signInAnonymously(auth).catch(() => {});
-          const response = await fetch(localUri);
-          const blob = await response.blob();
-          const storageRef = ref(storage, `profileImages/${currentUser.id}`);
-          await uploadBytes(storageRef, blob);
-          profileImage = await getDownloadURL(storageRef);
-          await updateUser(currentUser.id, { profileImage });
-        }
-        setUser(prev => ({ ...prev, profileImage }));
-        const stored = await AsyncStorage.getItem('currentUser');
-        if (stored) {
-          const updated = { ...JSON.parse(stored), profileImage };
-          await AsyncStorage.setItem('currentUser', JSON.stringify(updated));
-          onUpdateUser?.(updated);
-        }
-      } catch (e) {
-        showToast('수정에 실패했어요. 다시 시도해주세요.');
-      }
-    }
-  };
-
-  const handleDefaultImage = async () => {
-    handleCloseProfileModal();
-    const newUser = { ...user, profileImage: null };
-    setUser(newUser);
-    try {
-      if (currentUser?.id) await updateUser(currentUser.id, { profileImage: null });
-      const stored = await AsyncStorage.getItem('currentUser');
-      if (stored) {
-        const updated = { ...JSON.parse(stored), profileImage: null };
-        await AsyncStorage.setItem('currentUser', JSON.stringify(updated));
-        onUpdateUser?.(updated);
-      }
-    } catch {}
-  };
-
-  React.useEffect(() => {
-    if (!showProfileEdit) return;
-    if (nicknameInput.length === 0) { setNicknameError(''); setIsNicknameValid(false); return; }
-    const timer = setTimeout(() => {
-      if (/[!@#$%^&*(),.?":{}|<>]/.test(nicknameInput)) {
-        setNicknameError('!@#$등 특수문자는 사용할 수 없습니다.'); setIsNicknameValid(false);
-      } else if (nicknameInput.length < 2) {
-        setNicknameError('2자 이상으로 입력해주세요.'); setIsNicknameValid(false);
-      } else {
-        setNicknameError(''); setIsNicknameValid(true);
-      }
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [nicknameInput, showProfileEdit]);
-
-  const handleOpenProfileEdit = () => {
-    setNicknameInput(user.nickname);
-    setNicknameError('');
-    setIsNicknameValid(true);
-    setShowProfileEdit(true);
-  };
-
-  const handleSaveProfile = async () => {
-    if (!isNicknameValid) return;
-    const newUser = { ...user, nickname: nicknameInput };
-    setUser(newUser);
-    try {
-      if (currentUser?.id) {
-        await updateUser(currentUser.id, { nickname: nicknameInput, profileImage: user.profileImage ?? null });
-      }
-      const stored = await AsyncStorage.getItem('currentUser');
-      const base = stored ? JSON.parse(stored) : {};
-      const updated = { ...base, nickname: nicknameInput, profileImage: user.profileImage ?? null };
-      await AsyncStorage.setItem('currentUser', JSON.stringify(updated));
-      onUpdateUser?.(updated);
-    } catch {}
-    setShowProfileEdit(false);
   };
 
   const getBook = (item) => {
@@ -245,6 +109,19 @@ export default function MyScreen({ reviews = [], currentUser, readingRecords = [
     const dates = new Set(readingRecords.map(r => r.date));
     return dates.size;
   }, [readingRecords]);
+
+  React.useEffect(() => {
+    if (showSettings) {
+      settingsSlide.setValue(screenWidth);
+      Animated.timing(settingsSlide, { toValue: 0, duration: 280, useNativeDriver: true }).start();
+    }
+  }, [showSettings]);
+
+  const handleCloseSettings = () => {
+    Animated.timing(settingsSlide, { toValue: screenWidth, duration: 280, useNativeDriver: true }).start(() => {
+      onSettingsClose?.();
+    });
+  };
 
   const [scrollY, setScrollY] = React.useState(0);
   const [profileSectionHeight, setProfileSectionHeight] = React.useState(0);
@@ -280,10 +157,10 @@ export default function MyScreen({ reviews = [], currentUser, readingRecords = [
             style={styles.profileSection}
             onLayout={(e) => setProfileSectionHeight(e.nativeEvent.layout.height)}
           >
-            <TouchableOpacity style={styles.profileImageContainer} onPress={handleOpenProfileEdit} activeOpacity={0.7}>
+            <TouchableOpacity style={styles.profileImageContainer} onPress={onOpenProfileEdit} activeOpacity={0.7}>
               <UserProfile imageUri={user.profileImage} size={64} style={styles.profileImage} />
               <View style={styles.editIconButton}>
-                <IconButton size={28} onPress={handleOpenProfileEdit}>
+                <IconButton size={28} onPress={onOpenProfileEdit}>
                   <EditFillIcon />
                 </IconButton>
               </View>
@@ -355,83 +232,13 @@ export default function MyScreen({ reviews = [], currentUser, readingRecords = [
         )}
       </View>
 
-      {/* 프로필 수정 서브 페이지 */}
-      {showProfileEdit && (
-        <View style={styles.profileEditContainer}>
-          <DefaultHeader
-            title="프로필 수정"
-            onBack={() => setShowProfileEdit(false)}
-            hideRightButton
-            backgroundColor={Colors.white}
-            showBlur={false}
-            topInset={insets.top}
-          />
-
-          {/* 콘텐츠 */}
-          <View style={[styles.profileEditContent, { marginTop: insets.top + 52 }]}>
-            {/* 프로필 이미지 */}
-            <View style={styles.profileEditImageContainer}>
-              <UserProfile imageUri={user.profileImage} size={80} style={styles.profileEditImage} />
-              <View style={styles.profileEditIconButton}>
-                <IconButton size={28} onPress={handleOpenProfileModal}>
-                  <EditFillIcon />
-                </IconButton>
-              </View>
-            </View>
-
-            {/* 닉네임 입력 */}
-            <View style={styles.profileEditField}>
-              <TextField
-                value={nicknameInput}
-                onChangeText={(text) => setNicknameInput(text.replace(/\s/g, '').slice(0, 8))}
-                placeholder="username"
-                helpText={nicknameError || '띄어쓰기 없이 8자 이내로 입력해주세요'}
-                error={!!nicknameError}
-                maxLength={8}
-              />
-            </View>
-          </View>
-
-          {/* 수정 버튼 */}
-          <View style={[styles.profileEditBottom, { paddingBottom: insets.bottom + Spacing.md }]}>
-            <Button variant="primary" size="xxlarge" onPress={handleSaveProfile} disabled={!isNicknameValid || !!nicknameError}>
-              수정
-            </Button>
-          </View>
-        </View>
-      )}
-
-      {/* 프로필 이미지 변경 바텀시트 */}
-      {isProfileModalVisible && (
-        <Modal visible transparent animationType="none" onRequestClose={handleCloseProfileModal}>
-          <Pressable style={styles.modalOverlay} onPress={handleCloseProfileModal}>
-            <Animated.View style={[styles.modalContainer, { transform: [{ translateY: profileModalTranslateY }] }]}>
-              <Pressable onPress={e => e.stopPropagation()}>
-                <View {...profilePanResponder.panHandlers}>
-                  <PopupHeader title="프로필 이미지" />
-                </View>
-                <View style={styles.modalBody}>
-                  <View style={styles.optionBox}>
-                    <TouchableOpacity style={styles.optionItem} onPress={handleSelectImage}>
-                      <Text style={styles.optionText}>이미지 선택</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.optionItem} onPress={handleDefaultImage}>
-                      <Text style={styles.optionText}>기본 이미지</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </Pressable>
-            </Animated.View>
-          </Pressable>
-        </Modal>
-      )}
-
       {/* 설정 페이지 */}
-      {showSettings && (
+      <Modal visible={showSettings} animationType="none" presentationStyle="fullScreen" onRequestClose={handleCloseSettings}>
+        <Animated.View style={[{ flex: 1 }, { transform: [{ translateX: settingsSlide }] }]}>
         <View style={styles.profileEditContainer}>
           <DefaultHeader
             title="설정"
-            onBack={() => onSettingsClose?.()}
+            onBack={handleCloseSettings}
             hideRightButton
             backgroundColor={Colors.white}
             showBlur={false}
@@ -467,11 +274,15 @@ export default function MyScreen({ reviews = [], currentUser, readingRecords = [
                 <Text style={styles.settingRowValue}>1.0.0</Text>
               </View>
               <TouchableOpacity style={styles.settingRow} activeOpacity={0.7} onPress={() => setSelectedTerm('service')}>
-                <Text style={styles.settingRowLabel}>이용약관</Text>
+                <Text style={styles.settingRowLabel}>서비스 이용약관</Text>
                 <ArrowRightIcon width={16} height={16} />
               </TouchableOpacity>
               <TouchableOpacity style={styles.settingRow} activeOpacity={0.7} onPress={() => setSelectedTerm('privacy')}>
-                <Text style={styles.settingRowLabel}>개인정보 처리방침</Text>
+                <Text style={styles.settingRowLabel}>개인정보 수집 및 이용 동의</Text>
+                <ArrowRightIcon width={16} height={16} />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.settingRow} activeOpacity={0.7} onPress={() => setSelectedTerm('marketing')}>
+                <Text style={styles.settingRowLabel}>마케팅 수신 동의</Text>
                 <ArrowRightIcon width={16} height={16} />
               </TouchableOpacity>
             </View>
@@ -491,35 +302,35 @@ export default function MyScreen({ reviews = [], currentUser, readingRecords = [
             </View>
           </ScrollView>
         </View>
-      )}
+        </Animated.View>
 
-      <TermsDetailModal
-        visible={selectedTerm !== null}
-        termId={selectedTerm}
-        onClose={() => setSelectedTerm(null)}
-      />
-
-      <WithdrawModal
-        visible={showWithdraw}
-        onClose={() => setShowWithdraw(false)}
-        onWithdraw={() => {
-          setShowWithdraw(false);
-          setTimeout(() => onWithdraw?.(), 300);
-        }}
-      />
-
-      <ModalPopup
-        visible={showLogoutConfirm}
-        title="로그아웃할까요?"
-        primaryButtonText="로그아웃"
-        secondaryButtonText="취소"
-        onPrimaryPress={() => {
-          setShowLogoutConfirm(false);
-          setTimeout(() => onLogout?.(), 300);
-        }}
-        onSecondaryPress={() => setShowLogoutConfirm(false)}
-        onClose={() => setShowLogoutConfirm(false)}
-      />
+        {/* 설정 Modal 안에서 뜨는 하위 모달들 */}
+        <TermsDetailModal
+          visible={selectedTerm !== null}
+          termId={selectedTerm}
+          onClose={() => setSelectedTerm(null)}
+        />
+        <WithdrawModal
+          visible={showWithdraw}
+          onClose={() => setShowWithdraw(false)}
+          onWithdraw={() => {
+            setShowWithdraw(false);
+            setTimeout(() => onWithdraw?.(), 300);
+          }}
+        />
+        <ModalPopup
+          visible={showLogoutConfirm}
+          title="로그아웃할까요?"
+          primaryButtonText="로그아웃"
+          secondaryButtonText="취소"
+          onPrimaryPress={() => {
+            setShowLogoutConfirm(false);
+            setTimeout(() => onLogout?.(), 300);
+          }}
+          onSecondaryPress={() => setShowLogoutConfirm(false)}
+          onClose={() => setShowLogoutConfirm(false)}
+        />
+      </Modal>
     </>
   );
 }
@@ -654,13 +465,8 @@ const styles = StyleSheet.create({
 
   // 프로필 수정 페이지
   profileEditContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    flex: 1,
     backgroundColor: Colors.white,
-    zIndex: 100,
   },
   profileEditContent: {
     flex: 1,

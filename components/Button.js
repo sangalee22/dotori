@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, Text, StyleSheet } from 'react-native';
+import { Pressable, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { Colors, Typography, Spacing, BorderRadius } from '../styles';
 
 /**
@@ -17,6 +17,7 @@ export default function Button({
   onPress,
   children,
   disabled = false,
+  loading = false,
   style,
   textStyle,
   ...props
@@ -65,29 +66,34 @@ export default function Button({
     text: styles.textPressed,
   };
 
+  const isDisabled = disabled || loading;
+  const indicatorColor = variant === 'primary' ? Colors.white : Colors.gray400;
+
   return (
     <Pressable
-      onPress={disabled ? undefined : onPress}
+      onPress={isDisabled ? undefined : onPress}
       style={({ pressed }) => [
         styles.button,
         sizeStyles[size],
         variantStyles[variant],
-        disabled && styles.disabled,
-        pressed && !disabled && pressedStyles[variant],
-        pressed && !disabled && variant !== 'text' && { transform: [{ translateY: 3 }] },
+        disabled && !loading && styles.disabled,
+        pressed && !isDisabled && pressedStyles[variant],
+        pressed && !isDisabled && variant !== 'text' && { transform: [{ translateY: 3 }] },
         style,
       ]}
       {...props}
     >
       {({ pressed }) =>
-        typeof children === 'string' ? (
+        loading ? (
+          <ActivityIndicator size="small" color={indicatorColor} />
+        ) : typeof children === 'string' ? (
           <Text
             style={[
               styles.text,
               textSizeStyles[size],
               textVariantStyles[variant],
-              disabled && styles.textDisabled,
-              pressed && !disabled && textPressedStyles[variant],
+              isDisabled && styles.textDisabled,
+              pressed && !isDisabled && textPressedStyles[variant],
               textStyle,
             ]}
           >

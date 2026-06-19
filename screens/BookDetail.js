@@ -73,6 +73,8 @@ export default function BookDetail({
   onToggleLike,
   reviews = [],
   currentUser,
+  blockedUserIds = [],
+  onBlock,
   initialTab = 'info',
   openReviewModal = false,
   reviewInitialPage = 0,
@@ -210,8 +212,9 @@ export default function BookDetail({
     const normTitle = (s) => (s || '').split(' - ')[0].trim().toLowerCase();
     const thisTitle = normTitle(bookTitle);
     let filtered = reviews.filter(review =>
-      review.bookIsbn === isbn ||
-      (thisTitle && normTitle(review.book?.title) === thisTitle)
+      (review.bookIsbn === isbn ||
+      (thisTitle && normTitle(review.book?.title) === thisTitle)) &&
+      !blockedUserIds.includes(review.userId)
     );
 
     // Apply progress filter if enabled
@@ -237,7 +240,7 @@ export default function BookDetail({
     }
 
     return filtered;
-  }, [reviews, isbn, showUpToMyProgress, currentPage, sortOrder]);
+  }, [reviews, isbn, showUpToMyProgress, currentPage, sortOrder, blockedUserIds]);
 
   // Page edit modal state
   const [isPageEditModalVisible, setIsPageEditModalVisible] = React.useState(false);
@@ -1136,11 +1139,13 @@ export default function BookDetail({
                     isSpoiler={item.isSpoiler}
                     isCompleted={item.isCompleted}
                     isMyReview={item.userId === currentUser?.id}
+                    reviewUserId={item.userId}
                     currentUser={currentUser}
                     onToggleLike={onToggleLike}
                     onRevealSpoiler={() => {}}
                     onEdit={handleEditReview}
                     onDelete={handleDeleteReview}
+                    onBlock={onBlock}
                   />
                   </View>
                 ))
@@ -1477,7 +1482,7 @@ export default function BookDetail({
                     size="xlarge"
                     onPress={handleSubmitReview}
                     style={styles.button}
-                    disabled={reviewContent.length < 5}
+                    disabled={reviewContent.trim().length === 0 && selectedImages.length === 0}
                   >
                     {isEditMode ? '수정' : '게시'}
                   </Button>

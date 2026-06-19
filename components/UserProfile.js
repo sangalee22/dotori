@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Image, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { BorderRadius, Colors } from '../styles';
 
@@ -24,9 +25,11 @@ export default function UserProfile({
   return (
     <View style={[styles.container, sizeStyle.container, style]}>
       {showImage ? (
-        <Image
+        <ExpoImage
           source={{ uri: imageUri }}
           style={styles.image}
+          contentFit="cover"
+          cachePolicy="memory-disk"
           onError={() => setImgError(true)}
         />
       ) : (
