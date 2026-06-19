@@ -973,7 +973,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
                   : selectedBookTotalPages > 0 && parseInt(endPageInput) > selectedBookTotalPages
                   ? `책의 마지막 페이지(${selectedBookTotalPages}p)를 넘었어요.`
                   : endPageInput.trim() && parseInt(endPageInput) <= readingStartPage
-                  ? '읽기 시작한 페이지보다 큰 값을 입력해주세요.'
+                  ? `읽기 시작한 페이지(${readingStartPage}p)보다 커야 합니다.`
                   : '읽기 시작한 페이지보다 큰 값을 입력해주세요.'
               }
               value={endPageInput}
