@@ -1,6 +1,8 @@
 import React from 'react';
-import { Modal, View, Text, TouchableOpacity, StyleSheet, Platform, Animated } from 'react-native';
+import { Modal, View, Text, TouchableOpacity, StyleSheet, Platform, Animated, NativeModules } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const hasGoogleAds = !!NativeModules.RNGoogleMobileAdsModule;
 import { Colors, Typography, Spacing, BorderRadius } from '../styles';
 
 const TEST_UNIT_ID = 'ca-app-pub-3940256099942544/6300978111';
@@ -14,10 +16,10 @@ export default function AdPopup({ visible, onClose }) {
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
 
   React.useEffect(() => {
-    if (Platform.OS === 'web') return;
+    if (!hasGoogleAds || Platform.OS === 'web') return;
     import('react-native-google-mobile-ads')
       .then(mod => setAdMod(mod))
-      .catch(() => {});
+      .catch(() => { onClose?.(); });
   }, []);
 
   // visible이 false가 되면 opacity 리셋
@@ -25,7 +27,7 @@ export default function AdPopup({ visible, onClose }) {
     if (!visible) fadeAnim.setValue(0);
   }, [visible]);
 
-  if (Platform.OS === 'web') return null;
+  if (!hasGoogleAds || Platform.OS === 'web') return null;
 
   const { BannerAd, BannerAdSize } = adMod || {};
 

@@ -1,7 +1,7 @@
 import React from 'react';
 import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View, ScrollView, Image, useWindowDimensions, TouchableOpacity, ActivityIndicator, Platform, Keyboard, Animated } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, Image, useWindowDimensions, TouchableOpacity, ActivityIndicator, Platform, Keyboard, Animated, Modal, Pressable } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -17,17 +17,21 @@ import BestBook from './components/BestBook';
 import NewBookCard from './components/NewBookCard';
 import Navigator from './components/Navigator';
 import BottomNavigation from './components/BottomNavigation';
+import PlayIcon from './components/PlayIcon';
 import BookDetail from './screens/BookDetail';
 import SearchScreen from './screens/SearchScreen';
 import SplashScreen from './screens/SplashScreen';
 import LoginScreen from './screens/LoginScreen';
 import NicknameInputScreen from './screens/NicknameInputScreen';
 import TermsAgreementScreen from './screens/TermsAgreementScreen';
+import OnboardingScreen from './screens/OnboardingScreen';
 import WeeklyBestDetail from './screens/WeeklyBestDetail';
 import DotoriRoomListScreen from './screens/DotoriRoomListScreen';
 import DotoriRoomScreen from './screens/DotoriRoomScreen';
 import MyScreen from './screens/MyScreen';
 import ModalPopup from './components/ModalPopup';
+import TextField from './components/TextField';
+import PopupHeader from './components/PopupHeader';
 import AdPopup from './components/AdPopup';
 import ProfileEditScreen from './components/ProfileEditScreen';
 import { registerUser, logout as firebaseLogout, withdrawUser, onAuthChange } from './services/auth';
@@ -68,6 +72,7 @@ export default function App() {
 
   const { width: windowWidth } = useWindowDimensions();
   const [showSplash, setShowSplash] = React.useState(true); // Show splash screen on app start
+  const [showOnboarding, setShowOnboarding] = React.useState(false);
   const [isLoggedIn, setIsLoggedIn] = React.useState(false); // Track login state
   useAppOpenAd(isLoggedIn);
   const [isInSignUpFlow, setIsInSignUpFlow] = React.useState(false); // Track if user is in sign-up process
@@ -86,6 +91,11 @@ export default function App() {
   const adPopupCheckedRef = React.useRef(false);
   const [feedTab, setFeedTab] = React.useState('all'); // 'all' | 'mine'
   const logoHeightAnim = React.useRef(new Animated.Value(60)).current;
+  const nowReadingScrollX = React.useRef(new Animated.Value(0)).current;
+  const [homeStartReadingBook, setHomeStartReadingBook] = React.useState(null);
+  const [homeStartPageInput, setHomeStartPageInput] = React.useState('');
+  const [homeStartPageError, setHomeStartPageError] = React.useState('');
+  const homeStartReadingTranslateY = React.useRef(new Animated.Value(300)).current;
   const lastScrollY = React.useRef(0);
   const logoVisible = React.useRef(true);
 
@@ -453,6 +463,49 @@ export default function App() {
     }).catch(() => {});
   }, []);
 
+  const syncPendingRecords = React.useCallback(async (userId) => {
+    try {
+      const raw = await AsyncStorage.getItem('pendingReadingRecords');
+      if (!raw) return;
+      const pending = JSON.parse(raw);
+      const userPending = pending.filter(r => r._userId === userId);
+      if (userPending.length === 0) return;
+
+      const succeeded = [];
+      const synced = [];
+      for (const item of userPending) {
+        try {
+          const { _userId, ...firestoreRecord } = item;
+          const docRef = await addReadingRecord(userId, firestoreRecord);
+          synced.push({ ...item, id: docRef.id });
+          succeeded.push(item.createdAt);
+        } catch {}
+      }
+
+      // Remove successfully synced from pending store
+      const remaining = pending.filter(r => !(r._userId === userId && succeeded.includes(r.createdAt)));
+      if (remaining.length === 0) {
+        await AsyncStorage.removeItem('pendingReadingRecords').catch(() => {});
+      } else {
+        await AsyncStorage.setItem('pendingReadingRecords', JSON.stringify(remaining)).catch(() => {});
+      }
+
+      // Merge synced records into readingRecords
+      if (synced.length > 0) {
+        setReadingRecords(prev => {
+          const existingKeys = new Set(prev.map(r => `${r.isbn}_${r.createdAt}`));
+          const newOnes = synced
+            .map(({ _userId, ...r }) => r)
+            .filter(r => !existingKeys.has(`${r.isbn}_${r.createdAt}`));
+          if (newOnes.length === 0) return prev;
+          const updated = [...prev, ...newOnes];
+          AsyncStorage.setItem('readingRecords', JSON.stringify(updated)).catch(() => {});
+          return updated;
+        });
+      }
+    } catch {}
+  }, []);
+
   // Firebase Auth 상태 감지 + Firestore 데이터 로드
   React.useEffect(() => {
     const unsubscribe = onAuthChange(async (firebaseUser) => {
@@ -530,49 +583,6 @@ export default function App() {
       'bookCache', 'timerState', 'timerPendingState',
       ...dynamicKeys,
     ]).catch(() => {});
-  }, []);
-
-  const syncPendingRecords = React.useCallback(async (userId) => {
-    try {
-      const raw = await AsyncStorage.getItem('pendingReadingRecords');
-      if (!raw) return;
-      const pending = JSON.parse(raw);
-      const userPending = pending.filter(r => r._userId === userId);
-      if (userPending.length === 0) return;
-
-      const succeeded = [];
-      const synced = [];
-      for (const item of userPending) {
-        try {
-          const { _userId, ...firestoreRecord } = item;
-          const docRef = await addReadingRecord(userId, firestoreRecord);
-          synced.push({ ...item, id: docRef.id });
-          succeeded.push(item.createdAt);
-        } catch {}
-      }
-
-      // Remove successfully synced from pending store
-      const remaining = pending.filter(r => !(r._userId === userId && succeeded.includes(r.createdAt)));
-      if (remaining.length === 0) {
-        await AsyncStorage.removeItem('pendingReadingRecords').catch(() => {});
-      } else {
-        await AsyncStorage.setItem('pendingReadingRecords', JSON.stringify(remaining)).catch(() => {});
-      }
-
-      // Merge synced records into readingRecords
-      if (synced.length > 0) {
-        setReadingRecords(prev => {
-          const existingKeys = new Set(prev.map(r => `${r.isbn}_${r.createdAt}`));
-          const newOnes = synced
-            .map(({ _userId, ...r }) => r)
-            .filter(r => !existingKeys.has(`${r.isbn}_${r.createdAt}`));
-          if (newOnes.length === 0) return prev;
-          const updated = [...prev, ...newOnes];
-          AsyncStorage.setItem('readingRecords', JSON.stringify(updated)).catch(() => {});
-          return updated;
-        });
-      }
-    } catch {}
   }, []);
 
   const handleSaveReadingRecord = React.useCallback(async (record) => {
@@ -738,6 +748,55 @@ export default function App() {
         lastActivityAt: updatedBook.lastActivityAt ?? null,
       }).catch(() => {});
     }
+  };
+
+  const handleOpenHomeStartReading = (book) => {
+    setHomeStartReadingBook(book);
+    setHomeStartPageInput(String(book.currentPage || ''));
+    setHomeStartPageError('');
+    homeStartReadingTranslateY.setValue(300);
+    Animated.spring(homeStartReadingTranslateY, {
+      toValue: 0,
+      useNativeDriver: true,
+      tension: 50,
+      friction: 10,
+    }).start();
+  };
+
+  const handleCloseHomeStartReading = () => {
+    Animated.timing(homeStartReadingTranslateY, {
+      toValue: 300,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => {
+      setHomeStartReadingBook(null);
+      setHomeStartPageInput('');
+      setHomeStartPageError('');
+    });
+  };
+
+  const handleConfirmHomeStartReading = () => {
+    const book = homeStartReadingBook;
+    const totalPages = book?.totalPages || 0;
+    const inputNum = homeStartPageInput.trim() === '' ? 0 : parseInt(homeStartPageInput, 10);
+
+    if (isNaN(inputNum) || inputNum < 0) {
+      setHomeStartPageError('올바른 페이지를 입력해주세요');
+      return;
+    }
+    if (totalPages > 0 && inputNum > totalPages) {
+      setHomeStartPageError('책의 마지막 페이지를 넘었어요');
+      return;
+    }
+
+    updateReadingBook(book, 'updatePage', { currentPage: inputNum, totalPages });
+    handleCloseHomeStartReading();
+
+    setBookDetailInitialTab('info');
+    setBookDetailOpenReviewModal(false);
+    setSelectedBook(book);
+    setPreviousView(currentView);
+    setCurrentView('bookDetail');
   };
 
   const uploadReviewImages = async (images, userId, reviewId) => {
@@ -1100,6 +1159,15 @@ export default function App() {
     );
   }
 
+  // Show onboarding after first sign-up
+  if (showOnboarding) {
+    return (
+      <SafeAreaProvider>
+        <OnboardingScreen onFinish={() => setShowOnboarding(false)} />
+      </SafeAreaProvider>
+    );
+  }
+
   // Show login/signup screens if not logged in
   if (!isLoggedIn) {
     // Show sign-up screens during sign-up flow
@@ -1143,6 +1211,7 @@ export default function App() {
                   const fbReviews = await getReviews().catch(() => []);
                   if (fbReviews.length > 0) setReviews(await enrichWithProfiles(fbReviews.map(normalizeReview)));
                   setIsLoggedIn(true);
+                  setShowOnboarding(true);
                   setIsInSignUpFlow(false);
                   setSignUpUserInfo(null);
                   setSignUpStep('nickname');
@@ -1218,6 +1287,15 @@ export default function App() {
             setSignUpUserInfo(userInfo);
             setIsInSignUpFlow(true);
           }}
+          onDevBypass={() => {
+            setCurrentUser({ id: 'dev-test-user', nickname: '테스트유저', email: 'dev@test.com', profileImage: null });
+            setIsLoggedIn(true);
+          }}
+          onDevOnboarding={() => {
+            setCurrentUser({ id: 'dev-test-user', nickname: '테스트유저', email: 'dev@test.com', profileImage: null });
+            setIsLoggedIn(true);
+            setShowOnboarding(true);
+          }}
         />
       </SafeAreaProvider>
     );
@@ -1237,29 +1315,69 @@ export default function App() {
               showsVerticalScrollIndicator={false}
             >
               {/* Now Reading Section */}
-            <View style={[styles.section, activeReadingBooks.length === 0 && { paddingHorizontal: 0 }]}>
+            <View style={styles.section}>
               {activeReadingBooks.length > 0 ? (
-                <>
-                  {activeReadingBooks.length === 1 ? (
-                    <TouchableOpacity
-                      style={styles.nowReading}
-                      onPress={() => {
-                        setBookDetailInitialTab('info');
-                        setBookDetailOpenReviewModal(false);
-                        setSelectedBook(activeReadingBooks[0]);
-                        addToRecentBooks(activeReadingBooks[0]);
-                        setPreviousView(currentView);
-                        setCurrentView('bookDetail');
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      {(() => {
-                        const book = activeReadingBooks[0];
-                        const totalPages = getBookTotalPages(book);
-                        const progress = totalPages > 0 ? Math.round((book.currentPage / totalPages) * 100) : 0;
-                        return (
-                          <>
-                            <View style={styles.bookCoverSmall}>
+                <ScrollView
+                  horizontal
+                  pagingEnabled={false}
+                  snapToInterval={windowWidth - Spacing.md - Spacing.lg}
+                  snapToAlignment="start"
+                  showsHorizontalScrollIndicator={false}
+                  scrollEnabled={activeReadingBooks.length > 1}
+                  scrollEventThrottle={16}
+                  decelerationRate="fast"
+                  contentContainerStyle={{ paddingHorizontal: Spacing.md }}
+                  onScroll={Animated.event(
+                    [{ nativeEvent: { contentOffset: { x: nowReadingScrollX } } }],
+                    { useNativeDriver: false }
+                  )}
+                >
+                  {activeReadingBooks.map((book, idx) => {
+                    const totalPages = getBookTotalPages(book);
+                    const progress = totalPages > 0 ? Math.round((book.currentPage / totalPages) * 100) : 0;
+                    const snapInterval = windowWidth - Spacing.md - Spacing.lg;
+                    const coverScale = nowReadingScrollX.interpolate({
+                      inputRange: [
+                        (idx - 1) * snapInterval,
+                        idx * snapInterval,
+                        (idx + 1) * snapInterval,
+                      ],
+                      outputRange: [0.50, 1, 0.50],
+                      extrapolate: 'clamp',
+                    });
+                    const coverTranslateX = coverScale.interpolate({
+                      inputRange: [0.50, 1],
+                      outputRange: [25.75, 0],
+                      extrapolate: 'clamp',
+                    });
+                    const cardTranslateX = nowReadingScrollX.interpolate({
+                      inputRange: [
+                        (idx - 1) * snapInterval,
+                        idx * snapInterval,
+                        (idx + 1) * snapInterval,
+                      ],
+                      outputRange: [-30, 0, 0],
+                      extrapolate: 'clamp',
+                    });
+                    return (
+                      <Animated.View
+                        key={book.isbn}
+                        style={{ width: windowWidth - Spacing.huge, marginRight: idx < activeReadingBooks.length - 1 ? Spacing.md : 0, transform: [{ translateX: cardTranslateX }] }}
+                      >
+                      <TouchableOpacity
+                        onPress={() => {
+                          setBookDetailInitialTab('info');
+                          setBookDetailOpenReviewModal(false);
+                          setSelectedBook(book);
+                          addToRecentBooks(book);
+                          setPreviousView(currentView);
+                          setCurrentView('bookDetail');
+                        }}
+                        activeOpacity={0.85}
+                      >
+                        <View style={styles.nowReadingRow}>
+                          <Animated.View style={[styles.nowReadingCoverShadow, { transform: [{ translateX: coverTranslateX }, { scale: coverScale }] }]}>
+                            <View style={styles.nowReadingCover}>
                               {book.coverImage ? (
                                 <Image
                                   source={typeof book.coverImage === 'string' ? { uri: book.coverImage } : book.coverImage}
@@ -1270,131 +1388,35 @@ export default function App() {
                                 <View style={styles.bookCoverPlaceholder} />
                               )}
                             </View>
-                            <View style={styles.nowReadingInfo}>
-                              <View>
-                                <Text style={styles.bookTitle}>{book.title ? book.title.split(' - ')[0].trim() : ''}</Text>
-                                <Text style={styles.bookAuthor}>{book.author || ''}</Text>
-                              </View>
-                              <View style={{ flex: 1, minHeight: Spacing.sm }} />
-                              <View style={styles.nowReadingBottom}>
-                                <View style={styles.progressSection}>
-                                  <Text style={styles.progressText}>
-                                    <Text style={styles.progressPercent}>{progress}%</Text> 읽음
-                                  </Text>
-                                  <View style={styles.progressBarBg}>
-                                    <View style={[styles.progressBar, { width: `${progress}%` }]} />
-                                  </View>
-                                </View>
-                                <Button
-                                  variant="primary"
-                                  size="medium"
-                                  onPress={() => {
-                                    setBookDetailInitialTab('reviews');
-                                    setBookDetailOpenReviewModal(true);
-                                    setSelectedBook(book);
-                                    addToRecentBooks(book);
-                                    setPreviousView(currentView);
-                                    setCurrentView('bookDetail');
-                                  }}
-                                  style={{ alignSelf: 'flex-end' }}
-                                >
-                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                    <Text style={{ color: Colors.white, ...Typography.body2Medium }}>독후감 쓰기</Text>
-                                    <ArrowRightIcon width={20} height={20} color={Colors.white} />
-                                  </View>
-                                </Button>
+                          </Animated.View>
+                          <View style={styles.nowReadingCard}>
+                            <Text style={styles.bookTitle} numberOfLines={2}>{book.title ? book.title.split(' - ')[0].trim() : ''}</Text>
+                            <Text style={styles.bookAuthor} numberOfLines={1}>{book.author || ''}</Text>
+                            <View style={{ flex: 1, minHeight: Spacing.md }} />
+                            <View style={styles.progressSection}>
+                              <Text style={styles.progressText}>
+                                <Text style={styles.progressPercent}>{progress}%</Text> 읽음
+                              </Text>
+                              <View style={styles.progressBarBg}>
+                                <View style={[styles.progressBar, { width: `${progress}%` }]} />
                               </View>
                             </View>
-                          </>
-                        );
-                      })()}
-                    </TouchableOpacity>
-                  ) : (
-                    <>
-                      <ScrollView
-                        horizontal
-                        pagingEnabled
-                        showsHorizontalScrollIndicator={false}
-                        onMomentumScrollEnd={(e) => {
-                          const page = Math.round(e.nativeEvent.contentOffset.x / (windowWidth - Spacing.md * 2));
-                          setActiveReadingPage(page);
-                        }}
-                        scrollEventThrottle={16}
-                        decelerationRate="fast"
-                      >
-                        {activeReadingBooks.map((book) => {
-                          const totalPages = getBookTotalPages(book);
-                          const progress = totalPages > 0 ? Math.round((book.currentPage / totalPages) * 100) : 0;
-                          return (
-                            <TouchableOpacity
-                              key={book.isbn}
-                              style={[styles.nowReading, { width: windowWidth - Spacing.md * 2 }]}
-                              onPress={() => {
-                                setBookDetailInitialTab('info');
-                                setBookDetailOpenReviewModal(false);
-                                setSelectedBook(book);
-                                addToRecentBooks(book);
-                                setPreviousView(currentView);
-                                setCurrentView('bookDetail');
-                              }}
-                              activeOpacity={0.7}
+                            <Button
+                              variant="primary"
+                              size="small"
+                              icon={<PlayIcon />}
+                              onPress={() => handleOpenHomeStartReading(book)}
+                              style={{ alignSelf: 'flex-end', marginTop: Spacing.md }}
                             >
-                              <View style={styles.bookCoverSmall}>
-                                {book.coverImage ? (
-                                  <Image
-                                    source={typeof book.coverImage === 'string' ? { uri: book.coverImage } : book.coverImage}
-                                    style={styles.bookCoverPlaceholder}
-                                    resizeMode="cover"
-                                  />
-                                ) : (
-                                  <View style={styles.bookCoverPlaceholder} />
-                                )}
-                              </View>
-                              <View style={styles.nowReadingInfo}>
-                                <View>
-                                  <Text style={styles.bookTitle}>{book.title ? book.title.split(' - ')[0].trim() : ''}</Text>
-                                  <Text style={styles.bookAuthor}>{book.author || ''}</Text>
-                                </View>
-                                <View style={{ flex: 1, minHeight: Spacing.sm }} />
-                                <View style={styles.nowReadingBottom}>
-                                  <View style={styles.progressSection}>
-                                    <Text style={styles.progressText}>
-                                      <Text style={styles.progressPercent}>{progress}%</Text> 읽음
-                                    </Text>
-                                    <View style={styles.progressBarBg}>
-                                      <View style={[styles.progressBar, { width: `${progress}%` }]} />
-                                    </View>
-                                  </View>
-                                  <Button
-                                    variant="primary"
-                                    size="medium"
-                                    onPress={() => {
-                                      setBookDetailInitialTab('reviews');
-                                      setBookDetailOpenReviewModal(true);
-                                      setSelectedBook(book);
-                                      addToRecentBooks(book);
-                                      setPreviousView(currentView);
-                                      setCurrentView('bookDetail');
-                                    }}
-                                    style={{ alignSelf: 'flex-end' }}
-                                  >
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                      <Text style={{ color: Colors.white, ...Typography.body2Medium }}>독후감 쓰기</Text>
-                                      <ArrowRightIcon width={20} height={20} color={Colors.white} />
-                                    </View>
-                                  </Button>
-                                </View>
-                              </View>
-                            </TouchableOpacity>
-                          );
-                        })}
-                      </ScrollView>
-                      <View style={styles.nowReadingIndicator}>
-                        <Navigator total={activeReadingBooks.length} active={activeReadingPage} />
-                      </View>
-                    </>
-                  )}
-                </>
+                              바로 읽기
+                            </Button>
+                          </View>
+                        </View>
+                      </TouchableOpacity>
+                      </Animated.View>
+                    );
+                  })}
+                </ScrollView>
               ) : (
                 <View style={styles.nowReadingNull}>
                   <Image
@@ -1414,7 +1436,7 @@ export default function App() {
 
 {/* Recent Interest Section */}
         {recentBooks.length > 0 && (
-          <View style={styles.section}>
+          <View style={[styles.section, { paddingHorizontal: Spacing.md }]}>
             <View style={[styles.sectionHeader, { marginBottom: 8 }]}>
               <SectionTitle>최근 이런 책에 관심을 가졌네요!</SectionTitle>
             </View>
@@ -1548,7 +1570,7 @@ export default function App() {
         </View>
 
         {/* Best Review Section */}
-        <View style={styles.section}>
+        <View style={[styles.section, { paddingHorizontal: Spacing.md }]}>
           <View style={[styles.sectionHeader, { marginBottom: 8 }]}>
             <SectionTitle>이번주 베스트 리뷰</SectionTitle>
           </View>
@@ -1608,7 +1630,7 @@ export default function App() {
             </View>
 
         {/* New Books Section */}
-        <View style={styles.section}>
+        <View style={[styles.section, { paddingHorizontal: Spacing.md }]}>
           <View style={[styles.sectionHeader, { marginBottom: Spacing.sm }]}>
             <SectionTitle>눈에 띄는 신간</SectionTitle>
           </View>
@@ -1918,6 +1940,48 @@ export default function App() {
         );
       })()}
 
+      {/* 홈 바로 읽기 - 독서 시작 모달 */}
+      <Modal
+        visible={!!homeStartReadingBook}
+        transparent
+        animationType="none"
+        onRequestClose={handleCloseHomeStartReading}
+        statusBarTranslucent
+      >
+        <Pressable style={homeModalStyles.overlay} onPress={handleCloseHomeStartReading}>
+          <Animated.View style={[homeModalStyles.content, { transform: [{ translateY: homeStartReadingTranslateY }] }]}>
+            <Pressable onPress={(e) => e.stopPropagation()}>
+              <PopupHeader title="독서 시작" />
+              <View style={homeModalStyles.body}>
+                <TextField
+                  label="몇 페이지부터 읽을까요?"
+                  value={homeStartPageInput}
+                  onChangeText={(text) => {
+                    setHomeStartPageInput(text.replace(/[^0-9]/g, ''));
+                    setHomeStartPageError('');
+                  }}
+                  placeholder="페이지 입력"
+                  keyboardType="number-pad"
+                  returnKeyType="none"
+                  helpText={homeStartPageError || '0을 입력하시면 처음부터 읽어요'}
+                  error={!!homeStartPageError}
+                  autoFocus
+                  inputAccessoryViewID="hideDoneButton"
+                />
+              </View>
+              <View style={homeModalStyles.buttons}>
+                <Button variant="outline" size="xlarge" onPress={handleCloseHomeStartReading} style={homeModalStyles.button}>
+                  취소
+                </Button>
+                <Button variant="primary" size="xlarge" onPress={handleConfirmHomeStartReading} style={homeModalStyles.button}>
+                  시작하기
+                </Button>
+              </View>
+            </Pressable>
+          </Animated.View>
+        </Pressable>
+      </Modal>
+
       {/* Search Screen overlay */}
       {(currentView === 'search' || (currentView === 'bookDetail' && previousView === 'search')) && (
         <SearchScreen
@@ -2034,7 +2098,6 @@ const styles = StyleSheet.create({
     marginTop: Spacing.sm,
   },
   section: {
-    paddingHorizontal: Spacing.md,
     marginBottom: 60,
   },
   sectionHeader: {
@@ -2043,17 +2106,39 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: Spacing.xs,
   },
-  nowReading: {
+  nowReadingRow: {
     flexDirection: 'row',
-    backgroundColor: Colors.white,
-    borderRadius: BorderRadius.huge,
-    gap: Spacing.md,
-    padding: Spacing.xl,
-    backgroundColor: Colors.gray50,
-  },
-  nowReadingIndicator: {
     alignItems: 'center',
-    marginTop: Spacing.md,
+    gap: Spacing.md,
+  },
+  nowReadingCoverShadow: {
+    zIndex: 2,
+    marginRight: -85,
+    borderRadius: BorderRadius.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 7,
+    elevation: 8,
+  },
+  nowReadingCover: {
+    width: 103,
+    height: 150,
+    borderRadius: BorderRadius.sm,
+    // borderWidth: 1,
+    // borderColor: Colors.gray100,
+    overflow: 'hidden',
+  },
+  nowReadingCard: {
+    flex: 1,
+    backgroundColor: Colors.gray50,
+    borderRadius: BorderRadius.huge,
+    paddingTop: Spacing.xl,
+    paddingRight: Spacing.xl,
+    paddingBottom: Spacing.xl,
+    paddingLeft: 85,
+    minHeight: 190,
+    // marginRight: Spacing.xs,
   },
   nowReadingNull: {
     alignItems: 'flex-start',
@@ -2090,9 +2175,6 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: Colors.gray200,
   },
-  nowReadingInfo: {
-    flex: 1,
-  },
   bookTitle: {
     ...Typography.headline2Bold,
     color: Colors.gray900,
@@ -2100,9 +2182,6 @@ const styles = StyleSheet.create({
   bookAuthor: {
     ...Typography.subtitle1Regular,
     color: Colors.gray800,
-  },
-  nowReadingBottom: {
-    gap: Spacing.md,
   },
   progressSection: {
   },
@@ -2115,7 +2194,7 @@ const styles = StyleSheet.create({
     fontWeight: FontWeights.extraBold,
   },
   progressBarBg: {
-    height: 8,
+    height: 4,
     backgroundColor: Colors.gray100,
     borderRadius: 10,
     overflow: 'hidden',
@@ -2205,5 +2284,32 @@ const styles = StyleSheet.create({
   errorText: {
     ...Typography.body2Regular,
     color: Colors.error,
+  },
+});
+
+const homeModalStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  content: {
+    backgroundColor: Colors.white,
+    borderTopLeftRadius: BorderRadius.xl,
+    borderTopRightRadius: BorderRadius.xl,
+    paddingBottom: Spacing.xl,
+  },
+  body: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.lg,
+  },
+  buttons: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+  },
+  button: {
+    flex: 1,
   },
 });

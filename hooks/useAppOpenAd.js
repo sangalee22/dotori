@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react';
-import { AppState, Platform } from 'react-native';
+import { AppState, Platform, NativeModules } from 'react-native';
+
+const hasGoogleAds = !!NativeModules.RNGoogleMobileAdsModule;
 
 const TEST_ID = 'ca-app-pub-3940256099942544/5662855259';
 const PROD_ID = 'ca-app-pub-9552392941451192/1894404277';
@@ -13,7 +15,7 @@ export default function useAppOpenAd(isLoggedIn) {
   const isAdLoaded = useRef(false);
 
   useEffect(() => {
-    if (Platform.OS === 'web' || !isLoggedIn) return;
+    if (Platform.OS === 'web' || !isLoggedIn || !hasGoogleAds) return;
 
     let subscription;
     let isMounted = true;

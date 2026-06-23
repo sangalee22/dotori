@@ -22,7 +22,7 @@ const GOOGLE_WEB_CLIENT_ID = '642592573898-elm8i8sjah4npkim86jcgr03vuarp41k.apps
 const GOOGLE_IOS_CLIENT_ID = '642592573898-4usjhm7pucep31piahrnj4sf4bdbgsbg.apps.googleusercontent.com';
 const GOOGLE_ANDROID_CLIENT_ID = '642592573898-elm8i8sjah4npkim86jcgr03vuarp41k.apps.googleusercontent.com'; // Android 전용 Client ID 발급 전까지 Web ID 사용
 
-export default function LoginScreen({ onLogin, onSignUp }) {
+export default function LoginScreen({ onLogin, onSignUp, onDevBypass, onDevOnboarding }) {
   const [isLoading, setIsLoading] = useState(false);
   const [conflictInfo, setConflictInfo] = useState(null);
 
@@ -202,6 +202,16 @@ export default function LoginScreen({ onLogin, onSignUp }) {
             )}
           </View>
 
+          {__DEV__ && (
+            <View style={styles.devButtons}>
+              <TouchableOpacity onPress={onDevBypass} style={styles.devButton}>
+                <Text style={styles.devButtonText}>🛠 테스트 입장</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={onDevOnboarding} style={styles.devButton}>
+                <Text style={styles.devButtonText}>📋 온보딩 보기</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       </SafeAreaView>
 
@@ -278,5 +288,22 @@ const styles = StyleSheet.create({
     ...Typography.headline3Medium,
     color: Colors.white,
     marginTop: Spacing.md,
+  },
+  devButtons: {
+    marginTop: Spacing.lg,
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+  devButton: {
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  devButtonText: {
+    ...Typography.body2Regular,
+    color: Colors.white,
   },
 });

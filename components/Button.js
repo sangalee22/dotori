@@ -1,6 +1,17 @@
 import React from 'react';
-import { Pressable, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { Pressable, Text, View, StyleSheet, ActivityIndicator } from 'react-native';
 import { Colors, Typography, Spacing, BorderRadius } from '../styles';
+
+const ICON_SIZE = { small: 20, medium: 20, large: 20, xlarge: 20, xxlarge: 20 };
+const ICON_GAP  = { small: Spacing.xs, medium: Spacing.xs, large: Spacing.xs, xlarge: Spacing.xs, xxlarge: Spacing.xs };
+
+const ICON_COLOR = {
+  primary: Colors.white,
+  default: Colors.gray900,
+  text:    Colors.primary500,
+  outline: Colors.gray900,
+  sub:     Colors.gray900,
+};
 
 /**
  * Button Component
@@ -8,6 +19,7 @@ import { Colors, Typography, Spacing, BorderRadius } from '../styles';
  * @param {string} size - 'small' (28) | 'medium' (32) | 'large' (40) | 'xlarge' (48) | 'xxlarge' (52)
  * @param {function} onPress - Press handler
  * @param {ReactNode} children - Button text or content
+ * @param {ReactElement} icon - 오른쪽 아이콘 (size·color 자동 적용)
  * @param {boolean} disabled - Disabled state
  * @param {object} style - Additional style overrides
  */
@@ -16,6 +28,7 @@ export default function Button({
   size = 'medium',
   onPress,
   children,
+  icon,
   disabled = false,
   loading = false,
   style,
@@ -47,11 +60,11 @@ export default function Button({
   };
 
   const textSizeStyles = {
-    small: styles.textSmall,
-    medium: styles.textMedium,
-    large: styles.textLarge,
-    xlarge: styles.textXLarge,
-    xxlarge: styles.textXXLarge,
+    small: variant === 'text' ? styles.textTextSmall : styles.textSmall,
+    medium: variant === 'text' ? styles.textTextMedium : styles.textMedium,
+    large: variant === 'text' ? styles.textTextLarge : styles.textLarge,
+    xlarge: variant === 'text' ? styles.textTextXLarge : styles.textXLarge,
+    xxlarge: variant === 'text' ? styles.textTextXXLarge : styles.textXXLarge,
   };
 
   const textVariantStyles = {
@@ -87,18 +100,40 @@ export default function Button({
         loading ? (
           <ActivityIndicator size="small" color={indicatorColor} />
         ) : typeof children === 'string' ? (
-          <Text
-            style={[
-              styles.text,
-              textSizeStyles[size],
-              textVariantStyles[variant],
-              isDisabled && styles.textDisabled,
-              pressed && !isDisabled && textPressedStyles[variant],
-              textStyle,
-            ]}
-          >
-            {children}
-          </Text>
+          icon ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: ICON_GAP[size] }}>
+              <Text
+                style={[
+                  styles.text,
+                  textSizeStyles[size],
+                  textVariantStyles[variant],
+                  isDisabled && styles.textDisabled,
+                  pressed && !isDisabled && textPressedStyles[variant],
+                  textStyle,
+                ]}
+              >
+                {children}
+              </Text>
+              {React.cloneElement(icon, {
+                width: ICON_SIZE[size],
+                height: ICON_SIZE[size],
+                color: isDisabled ? Colors.gray400 : ICON_COLOR[variant],
+              })}
+            </View>
+          ) : (
+            <Text
+              style={[
+                styles.text,
+                textSizeStyles[size],
+                textVariantStyles[variant],
+                isDisabled && styles.textDisabled,
+                pressed && !isDisabled && textPressedStyles[variant],
+                textStyle,
+              ]}
+            >
+              {children}
+            </Text>
+          )
         ) : (
           children
         )
@@ -173,7 +208,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary600,
   },
   pressedDefault: {
-    backgroundColor: Colors.primary600,
+    backgroundColor: Colors.gray200,
   },
   pressedSub: {
     backgroundColor: Colors.gray200,
@@ -189,11 +224,13 @@ const styles = StyleSheet.create({
   text: {
     textAlign: 'center',
   },
+
+  // default / primary / outline / sub 공유 텍스트 스타일
   textSmall: {
-    ...Typography.body2Regular,
+    ...Typography.body2Medium,
   },
   textMedium: {
-    ...Typography.body2Regular,
+    ...Typography.body1Medium,
   },
   textLarge: {
     ...Typography.body1Medium,
@@ -202,7 +239,24 @@ const styles = StyleSheet.create({
     ...Typography.subtitle1Medium,
   },
   textXXLarge: {
-    ...Typography.headline3Medium,
+    ...Typography.subtitle1Medium,
+  },
+
+  // text variant 전용 텍스트 스타일
+  textTextSmall: {
+    ...Typography.body2Regular,
+  },
+  textTextMedium: {
+    ...Typography.body2Regular,
+  },
+  textTextLarge: {
+    ...Typography.body1Medium,
+  },
+  textTextXLarge: {
+    ...Typography.subtitle1Medium,
+  },
+  textTextXXLarge: {
+    ...Typography.subtitle1Medium,
   },
 
   // Text color variants
