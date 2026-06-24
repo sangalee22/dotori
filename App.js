@@ -516,6 +516,8 @@ export default function App() {
             setCurrentUser({ id: firebaseUser.uid, ...userData });
             setIsLoggedIn(true);
             setShowSplash(false);
+            const seen = await AsyncStorage.getItem('hasSeenOnboarding');
+            if (seen === 'false') setShowOnboarding(true);
 
             // Firestore에서 데이터 로드
             const [fbReadingBooks, fbCompletedBooks, fbWantBooks, fbRecords, fbReviews] = await Promise.all([
@@ -1163,7 +1165,10 @@ export default function App() {
   if (showOnboarding) {
     return (
       <SafeAreaProvider>
-        <OnboardingScreen onFinish={() => setShowOnboarding(false)} />
+        <OnboardingScreen onFinish={async () => {
+          await AsyncStorage.setItem('hasSeenOnboarding', 'true');
+          setShowOnboarding(false);
+        }} />
       </SafeAreaProvider>
     );
   }
@@ -1210,6 +1215,7 @@ export default function App() {
                   setCurrentUser(userData);
                   const fbReviews = await getReviews().catch(() => []);
                   if (fbReviews.length > 0) setReviews(await enrichWithProfiles(fbReviews.map(normalizeReview)));
+                  await AsyncStorage.setItem('hasSeenOnboarding', 'false');
                   setIsLoggedIn(true);
                   setShowOnboarding(true);
                   setIsInSignUpFlow(false);

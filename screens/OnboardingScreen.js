@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import {
-  View, Text, FlatList, StyleSheet, Dimensions,
+  View, Text, Image, FlatList, StyleSheet, Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Navigator from '../components/Navigator';
@@ -13,23 +13,23 @@ const IMAGE_SIZE = Math.min(SCREEN_WIDTH, 400);
 const SLIDES = [
   {
     id: '1',
-    // image: require('../assets/onboarding1.png'),
+    image: require('../assets/img_onboarding01.png'),
     text: '읽는 중인 책을 바로 기록하거나,\n새로운 독서를 기록할 수 있어요',
   },
   {
     id: '2',
-    // image: require('../assets/onboarding2.png'),
-    text: '캘린더에서 나의 모든\n독서 기록을 확인할 수 있어요',
+    image: require('../assets/img_onboarding02.png'),
+    text: '도토리룸에서 나의 모든\n독서 기록을 확인할 수 있어요',
   },
   {
     id: '3',
-    // image: require('../assets/onboarding3.png'),
-    text: '독서 기록을 저장하고\n공유할 수 있어요',
+    image: require('../assets/img_onboarding03.png'),
+    text: '나만의 독서 기록을 하고\n카드를 저장할 수 있어요',
   },
   {
     id: '4',
-    // image: require('../assets/onboarding4.png'),
-    text: '나만의 독후감 피드를 만들고\n다른 사람들과 독후감을 공유해볼까요?',
+    image: require('../assets/img_onboarding04.png'),
+    text: '도토리에서 다른 사람들과\n독후감을 공유를 시작해볼까요?',
   },
 ];
 
@@ -55,9 +55,7 @@ export default function OnboardingScreen({ onFinish }) {
 
   const renderSlide = ({ item }) => (
     <View style={styles.slide}>
-      {/* 이미지 추가 시 아래 View를 Image로 교체:
-          <Image source={item.image} style={styles.image} resizeMode="contain" /> */}
-      <View style={styles.imagePlaceholder} />
+      <Image source={item.image} style={styles.image} resizeMode="contain" />
     </View>
   );
 
@@ -114,12 +112,6 @@ const styles = StyleSheet.create({
     height: 400,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  imagePlaceholder: {
-    width: IMAGE_SIZE,
-    height: IMAGE_SIZE,
-    backgroundColor: Colors.gray100,
-    borderRadius: Spacing.sm,
   },
   image: {
     width: IMAGE_SIZE,

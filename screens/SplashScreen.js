@@ -25,9 +25,6 @@ export default function SplashScreen({ onFinish }) {
           <SimbolFillIcon width={32} height={32} fillColor="#B284E7" strokeColor="#3D3941" />
           <LogoTextIcon width={108} height={22} color="#3D3941" />
         </View>
-
-        {/* Subtitle */}
-        <Text style={styles.subtitle}>우리들의 독서 공간 도토리</Text>
       </View>
     </View>
   );
