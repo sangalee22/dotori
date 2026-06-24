@@ -521,7 +521,10 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
     }
     try {
       const success = await saveCardImage(cardCaptureRef);
-      if (success) showResultToast('이미지가 저장되었어요.');
+      if (success) {
+        logEvent('reading_card_save', { isbn: (isManualResultRef.current ? manualResultBook : timerBook)?.isbn });
+        showResultToast('이미지가 저장되었어요.');
+      }
     } catch {
       showResultToast('이미지 저장에 실패했어요.');
     }

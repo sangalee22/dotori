@@ -31,6 +31,7 @@ import CheckIcon from '../components/CheckIcon';
 import { useToast } from '../contexts/ToastContext';
 import { fetchBookDetail, searchBooks, formatAuthorForDetail } from '../services/aladinApi';
 import { formatTimeAgo } from '../utils/formatTimeAgo';
+import { logEvent } from '../services/analytics';
 import Skeleton from '../components/Skeleton';
 
 /**
@@ -132,6 +133,7 @@ export default function BookDetail({
   const [editingReviewId, setEditingReviewId] = React.useState(null); // Track which review is being edited
   const [isEditMode, setIsEditMode] = React.useState(false); // Track if we're in edit mode
   const reviewModalTranslateY = React.useRef(new Animated.Value(Dimensions.get('window').height)).current;
+  const reviewSubmittedRef = React.useRef(false);
 
   // Auto-open edit modal when editReviewData is provided
   React.useEffect(() => {
@@ -158,6 +160,8 @@ export default function BookDetail({
   React.useEffect(() => {
     if (openReviewModal) {
       const timer = setTimeout(() => {
+        logEvent('review_start', { isbn, source: 'timer_result' });
+        reviewSubmittedRef.current = false;
         setReviewPageInput(reviewInitialPage > 0 ? String(reviewInitialPage) : '');
         setReviewContent('');
         setIsSpoiler(true);
@@ -644,6 +648,8 @@ export default function BookDetail({
   // Handle review modal
   const handleOpenReview = () => {
     if (isReviewModalVisible) return;
+    logEvent('review_start', { isbn, source: 'manual' });
+    reviewSubmittedRef.current = false;
     setReviewPageInput('');
     setReviewContent('');
     setIsSpoiler(true);
@@ -658,6 +664,10 @@ export default function BookDetail({
   };
 
   const handleCloseReview = () => {
+    if (!reviewSubmittedRef.current) {
+      logEvent('review_abandon', { isbn });
+    }
+    reviewSubmittedRef.current = false;
     Animated.timing(reviewModalTranslateY, {
       toValue: Dimensions.get('window').height,
       duration: 300,
@@ -745,6 +755,8 @@ export default function BookDetail({
           updatedAt: new Date().toISOString(),
         };
         if (onEditReview) await onEditReview(editingReviewId, updatedReview);
+        logEvent('review_complete', { isbn, mode: 'edit' });
+        reviewSubmittedRef.current = true;
         handleCloseReview();
         showToast('독후감이 수정되었습니다.');
       } else {
@@ -776,6 +788,8 @@ export default function BookDetail({
         if (onUpdateReading && page) {
           onUpdateReading('addReview', { currentPage: page, totalPages, isCompleted: false });
         }
+        logEvent('review_complete', { isbn, mode: 'new', has_image: selectedImages.length > 0 });
+        reviewSubmittedRef.current = true;
         handleCloseReview();
         setActiveTab('reviews');
         setTimeout(() => { scrollViewRef.current?.scrollTo({ y: 0, animated: true }); }, 100);
