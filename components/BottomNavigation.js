@@ -26,6 +26,7 @@ import Toast from './Toast';
 import Switch from './Switch';
 import ResultStyleTab from './ResultStyleTab';
 import PopupHeader from './PopupHeader';
+import { logEvent } from '../services/analytics';
 
 function AddRecordForm({ addRecordBook, addRecordDate, addRecordStartPage, setAddRecordStartPage, addRecordEndPage, setAddRecordEndPage, readingRecords, insets, onSave }) {
   const [hours, setHours] = React.useState('');
@@ -534,6 +535,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
           imageUri = await captureCard(cardCaptureRef);
         } catch (e) { }
       }
+      logEvent('write_review_tap', { isbn: (isManualResultRef.current ? manualResultBook : timerBook)?.isbn });
       setIsResultModalVisible(false);
       onWriteReview?.({
         book: isManualResultRef.current ? manualResultBook : timerBook,
@@ -560,6 +562,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
   };
 
   const handleStartReading = () => {
+    logEvent('timer_start', { isbn: selectedBook?.isbn });
     setTimerBook(selectedBook);
     setTimerBookTotalPages(selectedBookTotalPages);
     setReadingStartTime(new Date());
@@ -655,6 +658,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
 
   const handleSearch = async () => {
     if (!searchText.trim()) return;
+    logEvent('book_search', { query: searchText.trim() });
     setIsSearching(true);
     setHasSearched(true);
     try {
@@ -764,6 +768,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
         primaryButtonText="정지"
         secondaryButtonText="일시정지"
         onPrimaryPress={() => {
+          logEvent('timer_stop', { isbn: (timerBook || selectedBook)?.isbn, elapsed: getCurrentElapsed() });
           const todayStr = new Date().toISOString().split('T')[0];
           const existingDates = selectedBook?.readingDates || [];
           const uniqueDays = new Set(existingDates);

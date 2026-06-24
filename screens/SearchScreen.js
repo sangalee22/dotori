@@ -8,6 +8,7 @@ import BestBook from '../components/BestBook';
 import SectionTitle from '../components/SectionTitle';
 import EmptyState from '../components/EmptyState';
 import { searchBooks } from '../services/aladinApi';
+import { logEvent } from '../services/analytics';
 
 /**
  * SearchScreen Component
@@ -48,6 +49,7 @@ export default function SearchScreen({
   // Handle search submission (e.g., when user presses Enter)
   const handleSearch = async () => {
     if (searchText.trim()) {
+      logEvent('book_search', { query: searchText.trim() });
       if (onAddSearch) {
         onAddSearch(searchText);
       }

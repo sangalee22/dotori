@@ -35,6 +35,7 @@ import PopupHeader from './components/PopupHeader';
 import AdPopup from './components/AdPopup';
 import ProfileEditScreen from './components/ProfileEditScreen';
 import { registerUser, logout as firebaseLogout, withdrawUser, onAuthChange } from './services/auth';
+import { logScreen, logEvent, logLogin, logSignUp } from './services/analytics';
 import useAppOpenAd from './hooks/useAppOpenAd';
 import { getUser, getUserBooks, getReadingRecords, addReadingRecord, deleteReadingRecord, updateReadingRecord, getReviews, addReview, updateReview, deleteReview, toggleReviewLike, setUserBook, removeUserBook, updateReviewsBookInfo, getBookReaderCount, getBlockedUserIds, blockUser } from './services/firestore';
 import { storage, auth } from './services/firebase';
@@ -100,6 +101,13 @@ export default function App() {
   const logoVisible = React.useRef(true);
 
   // 스플래시 종료 + 로그인 상태일 때 광고 팝업 (하루 1회)
+  // 화면 추적
+  React.useEffect(() => {
+    if (!isLoggedIn) return;
+    const screen = currentView === 'home' ? `home_${activeBottomTab}` : currentView;
+    logScreen(screen);
+  }, [currentView, activeBottomTab, isLoggedIn]);
+
   React.useEffect(() => {
     if (!isLoggedIn || showSplash || adPopupCheckedRef.current || Platform.OS === 'web') return;
     adPopupCheckedRef.current = true;
@@ -778,6 +786,7 @@ export default function App() {
       return;
     }
 
+    logEvent('home_start_reading', { isbn: book?.isbn, page: inputNum });
     updateReadingBook(book, 'updatePage', { currentPage: inputNum, totalPages });
     handleCloseHomeStartReading();
     startTimerRef.current?.(book, inputNum);
@@ -1149,6 +1158,7 @@ export default function App() {
       <SafeAreaProvider>
         <OnboardingScreen onFinish={async () => {
           await AsyncStorage.setItem('hasSeenOnboarding', 'true');
+          logEvent('onboarding_complete');
           setShowOnboarding(false);
         }} />
       </SafeAreaProvider>
@@ -1198,6 +1208,7 @@ export default function App() {
                   const fbReviews = await getReviews().catch(() => []);
                   if (fbReviews.length > 0) setReviews(await enrichWithProfiles(fbReviews.map(normalizeReview)));
                   await AsyncStorage.setItem('hasSeenOnboarding', 'false');
+                  logSignUp(signUpUserInfo?.provider || 'unknown');
                   setIsLoggedIn(true);
                   setShowOnboarding(true);
                   setIsInSignUpFlow(false);
@@ -1268,6 +1279,7 @@ export default function App() {
             }
             syncPendingRecords(userInfo.id);
             getBlockedUserIds(auth.currentUser?.uid || userInfo.id).then(ids => setBlockedUserIds(ids)).catch(() => {});
+            logLogin(userInfo.provider || 'unknown');
             setIsLoggedIn(true);
           }}
           onSignUp={(userInfo) => {
