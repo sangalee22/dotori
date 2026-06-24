@@ -1635,61 +1635,7 @@ export default function App() {
               </View>
             </View>
 
-        {/* New Books Section */}
-        <View style={[styles.section, { paddingHorizontal: Spacing.md }]}>
-          <View style={[styles.sectionHeader, { marginBottom: Spacing.sm }]}>
-            <SectionTitle>눈에 띄는 신간</SectionTitle>
-          </View>
-          {isLoadingNewBooks ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={Colors.primary500} />
-              <Text style={styles.loadingText}>신간을 불러오는 중...</Text>
-            </View>
-          ) : (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.newBooksList}
-              contentContainerStyle={{ paddingHorizontal: Spacing.md }}
-            >
-              {newBooks.map((book, index) => {
-                // Split title and subtitle if "-" exists
-                const titleParts = book.title.split(' - ');
-                const mainTitle = titleParts[0].trim();
-                const subtitle = titleParts.length > 1 ? titleParts.slice(1).join(' - ').trim() : undefined;
-
-                return (
-                  <NewBookCard
-                    key={book.isbn || index}
-                    coverImage={book.coverImage}
-                    title={mainTitle}
-                    subtitle={subtitle}
-                    author={book.author}
-                    onPress={() => {
-                    const bookData = {
-                      isbn: book.isbn,
-                      title: book.title,
-                      author: book.author,
-                      coverImage: book.coverImage,
-                      description: book.description,
-                      publisher: book.publisher,
-                      pubDate: book.pubDate,
-                      priceStandard: book.priceStandard,
-                      priceSales: book.priceSales,
-                      link: book.link,
-                    };
-                    setSelectedBook(bookData);
-                    addToRecentBooks(bookData);
-                    setPreviousView(currentView);
-                    setCurrentView('bookDetail');
-                  }}
-                    style={{ marginRight: index === newBooks.length - 1 ? 0 : Spacing.md }}
-                  />
-                );
-              })}
-            </ScrollView>
-          )}
-        </View>
+        {/* New Books Section - 임시 숨김 */}
           </ScrollView>
           </View>
 
