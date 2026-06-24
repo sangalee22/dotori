@@ -250,7 +250,7 @@ function MyIcon({ active }) {
  * @param {function} onTabPress - Callback when tab is pressed, receives tab name
  * @param {object} style - Additional style overrides
  */
-export default function BottomNavigation({ activeTab = 'home', onTabPress, currentBooks = [], readingRecords = [], onUpdateReading, onWriteReview, onSaveReadingRecord, onReady, style }) {
+export default function BottomNavigation({ activeTab = 'home', onTabPress, currentBooks = [], readingRecords = [], onUpdateReading, onWriteReview, onSaveReadingRecord, onReady, startTimerRef, style }) {
   const insets = useSafeAreaInsets();
   const cardCaptureRef = React.useRef(null);
   const slideAnim = React.useRef(new Animated.Value(0)).current;
@@ -363,6 +363,19 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
   const isBookSelectingRef = React.useRef(false);
   const isSavingRef = React.useRef(false);
   const isPlayPressRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (startTimerRef) {
+      startTimerRef.current = (book, startPage) => {
+        setSelectedBook(book);
+        setTimerBook(book);
+        setTimerBookTotalPages(book.totalPages || 0);
+        setReadingStartTime(new Date());
+        setReadingStartPage(startPage || 0);
+        setTimeout(() => setIsPlaying(true), 300);
+      };
+    }
+  }, []);
 
   React.useEffect(() => {
     if (onReady) {

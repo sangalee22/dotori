@@ -95,8 +95,8 @@ export default function App() {
   const [homeStartReadingBook, setHomeStartReadingBook] = React.useState(null);
   const [homeStartPageInput, setHomeStartPageInput] = React.useState('');
   const [homeStartPageError, setHomeStartPageError] = React.useState('');
-  const homeStartReadingTranslateY = React.useRef(new Animated.Value(300)).current;
   const lastScrollY = React.useRef(0);
+  const startTimerRef = React.useRef(null);
   const logoVisible = React.useRef(true);
 
   // 스플래시 종료 + 로그인 상태일 때 광고 팝업 (하루 1회)
@@ -756,25 +756,12 @@ export default function App() {
     setHomeStartReadingBook(book);
     setHomeStartPageInput(String(book.currentPage || ''));
     setHomeStartPageError('');
-    homeStartReadingTranslateY.setValue(300);
-    Animated.spring(homeStartReadingTranslateY, {
-      toValue: 0,
-      useNativeDriver: true,
-      tension: 50,
-      friction: 10,
-    }).start();
   };
 
   const handleCloseHomeStartReading = () => {
-    Animated.timing(homeStartReadingTranslateY, {
-      toValue: 300,
-      duration: 200,
-      useNativeDriver: true,
-    }).start(() => {
-      setHomeStartReadingBook(null);
-      setHomeStartPageInput('');
-      setHomeStartPageError('');
-    });
+    setHomeStartReadingBook(null);
+    setHomeStartPageInput('');
+    setHomeStartPageError('');
   };
 
   const handleConfirmHomeStartReading = () => {
@@ -793,12 +780,7 @@ export default function App() {
 
     updateReadingBook(book, 'updatePage', { currentPage: inputNum, totalPages });
     handleCloseHomeStartReading();
-
-    setBookDetailInitialTab('info');
-    setBookDetailOpenReviewModal(false);
-    setSelectedBook(book);
-    setPreviousView(currentView);
-    setCurrentView('bookDetail');
+    startTimerRef.current?.(book, inputNum);
   };
 
   const uploadReviewImages = async (images, userId, reviewId) => {
@@ -1813,6 +1795,7 @@ export default function App() {
             }}
             onSaveReadingRecord={handleSaveReadingRecord}
             onReady={(openModal) => { openReadingModalRef.current = openModal; }}
+            startTimerRef={startTimerRef}
           />
         </SafeAreaView>
       </View>
@@ -1893,46 +1876,39 @@ export default function App() {
       })()}
 
       {/* 홈 바로 읽기 - 독서 시작 모달 */}
-      <Modal
+      <ModalPopup
         visible={!!homeStartReadingBook}
-        transparent
-        animationType="none"
-        onRequestClose={handleCloseHomeStartReading}
-        statusBarTranslucent
+        title="몇 페이지부터 읽을까요?"
+        description={homeStartReadingBook?.title?.split(' - ')[0].trim()}
+        descriptionStyle={{ color: Colors.primary500 }}
+        primaryButtonText="시작하기"
+        secondaryButtonText="취소"
+        onPrimaryPress={handleConfirmHomeStartReading}
+        primaryButtonDisabled={
+          homeStartPageInput.trim() !== '' && (
+            isNaN(parseInt(homeStartPageInput, 10)) ||
+            (homeStartReadingBook?.totalPages > 0 && parseInt(homeStartPageInput, 10) > homeStartReadingBook.totalPages)
+          )
+        }
+        onClose={handleCloseHomeStartReading}
       >
-        <Pressable style={homeModalStyles.overlay} onPress={handleCloseHomeStartReading}>
-          <Animated.View style={[homeModalStyles.content, { transform: [{ translateY: homeStartReadingTranslateY }] }]}>
-            <Pressable onPress={(e) => e.stopPropagation()}>
-              <PopupHeader title="독서 시작" />
-              <View style={homeModalStyles.body}>
-                <TextField
-                  label="몇 페이지부터 읽을까요?"
-                  value={homeStartPageInput}
-                  onChangeText={(text) => {
-                    setHomeStartPageInput(text.replace(/[^0-9]/g, ''));
-                    setHomeStartPageError('');
-                  }}
-                  placeholder="페이지 입력"
-                  keyboardType="number-pad"
-                  returnKeyType="none"
-                  helpText={homeStartPageError || '0을 입력하시면 처음부터 읽어요'}
-                  error={!!homeStartPageError}
-                  autoFocus
-                  inputAccessoryViewID="hideDoneButton"
-                />
-              </View>
-              <View style={homeModalStyles.buttons}>
-                <Button variant="outline" size="xlarge" onPress={handleCloseHomeStartReading} style={homeModalStyles.button}>
-                  취소
-                </Button>
-                <Button variant="primary" size="xlarge" onPress={handleConfirmHomeStartReading} style={homeModalStyles.button}>
-                  시작하기
-                </Button>
-              </View>
-            </Pressable>
-          </Animated.View>
-        </Pressable>
-      </Modal>
+        <TextField
+          label=""
+          value={homeStartPageInput}
+          onChangeText={(text) => {
+            setHomeStartPageInput(text.replace(/[^0-9]/g, ''));
+            setHomeStartPageError('');
+          }}
+          placeholder="페이지 입력"
+          keyboardType="number-pad"
+          returnKeyType="done"
+          helpText={homeStartPageError || '0을 입력하시면 처음부터 읽어요'}
+          error={!!homeStartPageError}
+          autoFocus
+          inputAccessoryViewID="hideDoneButton"
+          style={{ marginTop: Spacing.md }}
+        />
+      </ModalPopup>
 
       {/* Search Screen overlay */}
       {(currentView === 'search' || (currentView === 'bookDetail' && previousView === 'search')) && (
@@ -2239,29 +2215,3 @@ const styles = StyleSheet.create({
   },
 });
 
-const homeModalStyles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'flex-end',
-  },
-  content: {
-    backgroundColor: Colors.white,
-    borderTopLeftRadius: BorderRadius.xl,
-    borderTopRightRadius: BorderRadius.xl,
-    paddingBottom: Spacing.xl,
-  },
-  body: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.lg,
-  },
-  buttons: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.lg,
-  },
-  button: {
-    flex: 1,
-  },
-});
