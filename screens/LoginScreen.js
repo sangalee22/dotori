@@ -15,9 +15,7 @@ import { ShapeStar, ShapeMint, ShapeMoon, ShapePink, ShapeRed, ShapeYellow } fro
 import { BlurView } from 'expo-blur';
 import Svg, { Path } from 'react-native-svg';
 
-// 네이티브 빌드 전까지는 null — 블러 마스크 없이 표시됨
-let MaskedView = null;
-try { MaskedView = require('@react-native-masked-view/masked-view').default; } catch {}
+import MaskedView from '@react-native-masked-view/masked-view';
 import { loginWithKakao, loginWithGoogle, loginWithApple, getGoogleRedirectResult } from '../services/auth';
 import ModalPopup from '../components/ModalPopup';
 import * as Google from 'expo-auth-session/providers/google';
@@ -41,7 +39,7 @@ const BOOK_H = BOOK_W * (759 / 853);
 // 일러스트 씬 고정 크기 (디바이스 무관)
 const SCENE = 300;
 const BK_LEFT = (SCENE - BOOK_W) / 2;       // 78
-const BK_TOP = (SCENE - BOOK_H) / 2;        // ≈86
+const BK_TOP = (SCENE - BOOK_H) / 2 + 69;   // ≈151
 
 export default function LoginScreen({ onLogin, onSignUp, onDevBypass, onDevOnboarding }) {
   const [isLoading, setIsLoading] = useState(false);
@@ -67,8 +65,8 @@ export default function LoginScreen({ onLogin, onSignUp, onDevBypass, onDevOnboa
   const parallax = (sensitivity, rotation = '0deg') => ({
     transform: [
       { rotate: rotation },
-      { translateX: tiltX.interpolate({ inputRange: [-1, 1], outputRange: [-sensitivity, sensitivity] }) },
-      { translateY: tiltY.interpolate({ inputRange: [-1, 1], outputRange: [-sensitivity, sensitivity] }) },
+      { translateX: tiltX.interpolate({ inputRange: [-1, 1], outputRange: [-sensitivity * 4, sensitivity * 4] }) },
+      { translateY: tiltY.interpolate({ inputRange: [-1, 1], outputRange: [-sensitivity * 4, sensitivity * 4] }) },
     ],
   });
 
@@ -205,7 +203,7 @@ export default function LoginScreen({ onLogin, onSignUp, onDevBypass, onDevOnboa
           {/* 300×300 일러스트 씬 */}
           <View style={styles.scene}>
             {/* ShapeStar × 2 */}
-            <Animated.View style={[styles.shape, { top: SCENE * 0.22, left: SCENE * 0.30 }, parallax(22, '20deg')]}>
+            <Animated.View style={[styles.shape, { top: SCENE * 0.18, left: SCENE * 0.25 }, parallax(22, '20deg')]}>
               <ShapeStar size={25} />
             </Animated.View>
             <Animated.View style={[styles.shape, { top: SCENE * 0.73, left: SCENE * 0.45 }, parallax(16, '-12deg')]}>
@@ -216,39 +214,39 @@ export default function LoginScreen({ onLogin, onSignUp, onDevBypass, onDevOnboa
             <Animated.View style={[styles.shape, { top: SCENE * 0.53, left: SCENE * 0.62 }, parallax(14, '30deg')]}>
               <ShapeMint size={23} />
             </Animated.View>
-            <Animated.View style={[styles.shape, { top: SCENE * 0.77, left: SCENE * 0.23 }, parallax(20, '-25deg')]}>
+            <Animated.View style={[styles.shape, { top: SCENE * 0.77, left: SCENE * 0.15 }, parallax(20, '-25deg')]}>
               <ShapeMint size={16} />
             </Animated.View>
 
             {/* ShapePink × 2 */}
-            <Animated.View style={[styles.shape, { top: SCENE * 0.64, left: SCENE * 0.30 }, parallax(18, '15deg')]}>
+            <Animated.View style={[styles.shape, { top: SCENE * 0.64, left: SCENE * 0.23 }, parallax(18, '15deg')]}>
               <ShapePink size={17} />
             </Animated.View>
-            <Animated.View style={[styles.shape, { top: SCENE * 0.20, left: SCENE * 0.45 }, parallax(12, '-20deg')]}>
+            <Animated.View style={[styles.shape, { top: SCENE * 0.10, left: SCENE * 0.45 }, parallax(12, '-20deg')]}>
               <ShapePink size={14.4} />
             </Animated.View>
 
             {/* ShapeMoon × 2 */}
-            <Animated.View style={[styles.shape, { top: SCENE * 0.40, left: SCENE * 0.37 }, parallax(16, '-35deg')]}>
+            <Animated.View style={[styles.shape, { top: SCENE * 0.35, left: SCENE * 0.37 }, parallax(16, '-35deg')]}>
               <ShapeMoon size={24} />
             </Animated.View>
-            <Animated.View style={[styles.shape, { top: SCENE * 0.75, left: SCENE * 0.65 }, parallax(22, '40deg')]}>
+            <Animated.View style={[styles.shape, { top: SCENE * 0.75, left: SCENE * 0.70 }, parallax(22, '40deg')]}>
               <ShapeMoon size={21} />
             </Animated.View>
 
             {/* ShapeRed × 2 */}
-            <Animated.View style={[styles.shape, { top: SCENE * 0.48, left: SCENE * 0.71 }, parallax(24, '10deg')]}>
+            <Animated.View style={[styles.shape, { top: SCENE * 0.45, left: SCENE * 0.80 }, parallax(24, '10deg')]}>
               <ShapeRed size={20.5} />
             </Animated.View>
-            <Animated.View style={[styles.shape, { top: SCENE * 0.35, left: SCENE * 0.55 }, parallax(14, '-18deg')]}>
+            <Animated.View style={[styles.shape, { top: SCENE * 0.28, left: SCENE * 0.60 }, parallax(14, '-18deg')]}>
               <ShapeRed size={13.8} />
             </Animated.View>
 
             {/* ShapeYellow × 2 */}
-            <Animated.View style={[styles.shape, { top: SCENE * 0.28, left: SCENE * 0.65 }, parallax(12, '25deg')]}>
+            <Animated.View style={[styles.shape, { top: SCENE * 0.20, left: SCENE * 0.70 }, parallax(12, '25deg')]}>
               <ShapeYellow size={11.7} />
             </Animated.View>
-            <Animated.View style={[styles.shape, { top: SCENE * 0.45, left: SCENE * 0.25 }, parallax(20, '-10deg')]}>
+            <Animated.View style={[styles.shape, { top: SCENE * 0.45, left: SCENE * 0.16 }, parallax(20, '-10deg')]}>
               <ShapeYellow size={16} />
             </Animated.View>
 
@@ -355,7 +353,7 @@ const styles = StyleSheet.create({
   },
   logoContainer: {
     alignItems: 'center',
-    gap: Spacing.xs,
+    gap: Spacing.lg,
   },
   subtitle: {
     ...Typography.headline3Medium,
