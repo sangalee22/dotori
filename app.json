@@ -2,7 +2,7 @@
   "expo": {
     "name": "도토리",
     "slug": "dotori",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "scheme": [
       "com.sanga.dotori",
       "kakao1b885f7c3d187e32d08f2db2c8a124b7",
@@ -27,6 +27,7 @@
     "runtimeVersion": "1.1.0",
     "ios": {
       "bundleIdentifier": "com.sanga.dotori",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "supportsTablet": false,
       "usesAppleSignIn": true,
       "infoPlist": {
@@ -57,6 +58,7 @@
     },
     "android": {
       "package": "com.sanga.dotori",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -71,6 +73,7 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      "@react-native-firebase/app",
       "expo-updates",
       "expo-web-browser",
       "expo-apple-authentication",
@@ -84,7 +87,7 @@
       [
         "react-native-google-mobile-ads",
         {
-          "androidAppId": "ca-app-pub-9552392941451192~4380966810",
+          "androidAppId": "ca-app-pub-9552392941451192~6748024136",
           "iosAppId": "ca-app-pub-9552392941451192~4380966810"
         }
       ]

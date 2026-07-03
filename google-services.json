@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "642592573898",
+    "project_id": "dotori-b69be",
+    "storage_bucket": "dotori-b69be.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:642592573898:android:de0567466a6d90e42ca733",
+        "android_client_info": {
+          "package_name": "com.sanga.dotori"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "642592573898-elm8i8sjah4npkim86jcgr03vuarp41k.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC_DcEUyXe4-oaNO2UKJ3yQxTOSR2pkJ5Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "642592573898-elm8i8sjah4npkim86jcgr03vuarp41k.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "642592573898-4usjhm7pucep31piahrnj4sf4bdbgsbg.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.sanga.dotori"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
