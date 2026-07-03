@@ -3,8 +3,12 @@ import { AppState, Platform, NativeModules } from 'react-native';
 
 const hasGoogleAds = !!NativeModules.RNGoogleMobileAdsModule;
 
-const TEST_ID = 'ca-app-pub-3940256099942544/5662855259';
-const PROD_ID = 'ca-app-pub-9552392941451192/1894404277';
+const TEST_ID = Platform.OS === 'android'
+  ? 'ca-app-pub-3940256099942544/9257395921'  // Android 앱오픈 테스트 ID
+  : 'ca-app-pub-3940256099942544/5662855259';
+const PROD_ID = Platform.OS === 'android'
+  ? 'ca-app-pub-9552392941451192/5550905229'
+  : 'ca-app-pub-9552392941451192/1894404277';
 const AD_UNIT_ID = __DEV__ ? TEST_ID : PROD_ID;
 
 let admobInitialized = false;

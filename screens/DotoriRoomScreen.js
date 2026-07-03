@@ -250,6 +250,7 @@ export default function DotoriRoomScreen({ readingBooks = [], reviews = [], read
   const [calYear, setCalYear] = React.useState(today.getFullYear());
   const [calMonth, setCalMonth] = React.useState(today.getMonth() + 1);
   const [bookshelfSubTab, setBookshelfSubTab] = React.useState('reading');
+  const [roomSubTab, setRoomSubTab] = React.useState('ongoing');
 
   const [selectedRecord, setSelectedRecord] = React.useState(null);
   const [selectedDate, setSelectedDate] = React.useState(null);
@@ -313,7 +314,7 @@ export default function DotoriRoomScreen({ readingBooks = [], reviews = [], read
 
   const subTabTop = insets.top + MAIN_TAB_HEIGHT;
 
-  const contentPaddingTop = activeTab === 'bookshelf'
+  const contentPaddingTop = (activeTab === 'bookshelf' || activeTab === 'dotoriRoom')
     ? insets.top + MAIN_TAB_HEIGHT + SUB_TAB_HEIGHT
     : insets.top + MAIN_TAB_HEIGHT;
 
@@ -327,6 +328,11 @@ export default function DotoriRoomScreen({ readingBooks = [], reviews = [], read
         <TouchableOpacity onPress={() => setActiveTab('bookshelf')} style={styles.mainTab} activeOpacity={0.7}>
           <Text style={activeTab === 'bookshelf' ? styles.mainTabTextActive : styles.mainTabTextInactive}>책장</Text>
         </TouchableOpacity>
+        {__DEV__ && (
+          <TouchableOpacity onPress={() => setActiveTab('dotoriRoom')} style={styles.mainTab} activeOpacity={0.7}>
+            <Text style={activeTab === 'dotoriRoom' ? styles.mainTabTextActive : styles.mainTabTextInactive}>도토리룸</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <ScrollView
@@ -410,6 +416,17 @@ export default function DotoriRoomScreen({ readingBooks = [], reviews = [], read
               </View>
             </View>
           </>
+        )}
+
+        {__DEV__ && activeTab === 'dotoriRoom' && (
+          <View style={{ paddingHorizontal: Spacing.md, paddingTop: Spacing.lg }}>
+            {roomSubTab === 'ongoing' && (
+              <EmptyState text="참여중인 도토리룸이 없어요" />
+            )}
+            {roomSubTab === 'completed' && (
+              <EmptyState text="완료된 도토리룸이 없어요" />
+            )}
+          </View>
         )}
 
         {activeTab === 'bookshelf' && (
@@ -518,6 +535,16 @@ export default function DotoriRoomScreen({ readingBooks = [], reviews = [], read
                 {tab.label}
               </SubTab>
             ))}
+          </View>
+          <View style={styles.subTabDivider} />
+        </View>
+      )}
+
+      {__DEV__ && activeTab === 'dotoriRoom' && (
+        <View style={[styles.subTabFixed, { top: subTabTop }]}>
+          <View style={styles.subTabRow}>
+            <SubTab active={roomSubTab === 'ongoing'} onPress={() => setRoomSubTab('ongoing')}>진행중</SubTab>
+            <SubTab active={roomSubTab === 'completed'} onPress={() => setRoomSubTab('completed')}>완료</SubTab>
           </View>
           <View style={styles.subTabDivider} />
         </View>

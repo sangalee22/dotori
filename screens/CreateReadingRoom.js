@@ -4,15 +4,12 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Image,
   TouchableOpacity,
   Platform,
   Animated,
-  Dimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Colors, Typography, Spacing, BorderRadius } from '../styles';
@@ -27,14 +24,17 @@ import MinusIcon from '../components/MinusIcon';
 import CalendarIcon from '../components/CalendarIcon';
 import Switch from '../components/Switch';
 import BookTopSection from '../components/BookTopSection';
-import InvitedUserItem from '../components/InvitedUserItem';
 import ModalPopup from '../components/ModalPopup';
 import DatePickerModal from '../components/DatePickerModal';
+import { fetchBookDetail, searchBooks, formatAuthorForDetail } from '../services/aladinApi';
+import { createRoomWithCode } from '../services/firestore';
+import { auth } from '../services/firebase';
 
 export default function CreateReadingRoom({
-  bookTitle = 'booktitle',
+  isbn,
+  bookTitle = null,
   bookSubtitle,
-  author = 'artist',
+  author = null,
   coverImage,
   onBack,
   onNext,
@@ -45,88 +45,113 @@ export default function CreateReadingRoom({
   const [roomName, setRoomName] = useState('');
   const [isPublic, setIsPublic] = useState(true);
   const [participantCount, setParticipantCount] = useState(0);
-  const [selectedDate, setSelectedDate] = useState(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)); // 30일 후
+  const [selectedDate, setSelectedDate] = useState(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [hasEditedRoomName, setHasEditedRoomName] = useState(false);
-  // 가상 데이터로 초기화 (UI 확인용)
-  const [invitedFriends, setInvitedFriends] = useState([
-    { id: '1', nickname: '포코어포코' },
-    { id: '2', nickname: '책읽는사람' },
-    { id: '3', nickname: '도토리' },
-    { id: '4', nickname: '독서왕' },
-    { id: '5', nickname: '리더' },
-    { id: '6', nickname: '작가지망생' },
-  ]);
-  // 친구 목록 스크롤 상태
-  const [friendScrollState, setFriendScrollState] = useState({
-    isScrollable: false,
-    showLeftGradient: false,
-    showRightGradient: false,
-  });
-  // 닫기 확인 모달 상태
+  const [hasDeadline, setHasDeadline] = useState(false);
   const [showCloseModal, setShowCloseModal] = useState(false);
+  const [bookData, setBookData] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [roomNameError, setRoomNameError] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
 
-  // 다음 버튼 활성화 조건: 공개이거나, 비공개일 때 친구 초대가 있어야 함
-  const isNextButtonEnabled = isPublic || invitedFriends.length > 0;
+  // displayTitle 확정되면 룸 이름 자동 세팅 (사용자가 직접 수정하지 않은 경우에만)
+  const hasEditedRoomName = React.useRef(false);
+  React.useEffect(() => {
+    if (hasEditedRoomName.current || !displayTitle) return;
+    const suffix = ' 도토리룸';
+    const maxTitleLen = 20 - suffix.length - 1; // 1 = '…' 길이
+    const title = displayTitle.length > 15
+      ? `${displayTitle.slice(0, maxTitleLen)}…`
+      : displayTitle;
+    setRoomName(`${title}${suffix}`);
+  }, [displayTitle]);
 
-  const handleIncrement = () => {
-    setParticipantCount(prev => prev + 1);
-  };
+  // BookDetail과 동일한 API 로딩 패턴
+  React.useEffect(() => {
+    if (!isbn && !bookTitle) return;
 
-  const handleDecrement = () => {
-    setParticipantCount(prev => Math.max(0, prev - 1));
-  };
+    const loadBookDetail = async () => {
+      setIsLoading(true);
+      try {
+        let targetIsbn = isbn;
 
-  const handleRemoveFriend = (friendId) => {
-    setInvitedFriends(prev => prev.filter(friend => friend.id !== friendId));
-  };
+        if (bookTitle) {
+          const norm = (s) => (s || '').split(' - ')[0].trim().toLowerCase();
+          const results = await searchBooks(bookTitle, 'Title', 3);
+          const match = results?.find(b => {
+            const t = norm(b.title);
+            const s = norm(bookTitle);
+            return t === s || t.includes(s) || s.includes(t);
+          }) || results?.[0];
+          if (match?.isbn) targetIsbn = match.isbn;
+        }
 
-  const handleClosePress = () => {
-    setShowCloseModal(true);
-  };
+        const data = await fetchBookDetail(targetIsbn);
+        setBookData(data);
+      } catch {
+        // 조회 실패 시 props fallback으로 표시
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-  const handleConfirmClose = () => {
-    setShowCloseModal(false);
-    if (onBack) {
-      onBack();
+    loadBookDetail();
+  }, [isbn, bookTitle]);
+
+  // BookDetail과 동일한 display 값 계산
+  const fullTitle = bookTitle || bookData?.title || '';
+  const titleParts = fullTitle.split(' - ');
+  const displayTitle = titleParts[0].trim();
+  const displaySubtitle = titleParts.length > 1
+    ? titleParts.slice(1).join(' - ').trim()
+    : (bookData?.subTitle || bookData?.subtitle || bookSubtitle);
+  const authorData = formatAuthorForDetail(author || bookData?.author);
+  const translatorRoles = ['옮긴이', '번역', '역자', '역'];
+  const mainAuthors = authorData.filter(a => !a.role || !translatorRoles.some(r => a.role.includes(r)));
+  const displayAuthor = mainAuthors.length > 0
+    ? mainAuthors.map(a => a.name).join(', ')
+    : (author?.split(',')[0].trim() ?? '');
+  const displayCover = coverImage || bookData?.cover;
+
+  const handleIncrement = () => setParticipantCount(prev => prev + 1);
+  const handleDecrement = () => setParticipantCount(prev => Math.max(0, prev - 1));
+
+  const handleNext = async () => {
+    if (!roomName.trim()) {
+      setRoomNameError(true);
+      return;
+    }
+    setIsCreating(true);
+    try {
+      const uid = auth.currentUser?.uid;
+      const { id: roomId, roomCode } = await createRoomWithCode({
+        name: roomName,
+        isPublic,
+        maxParticipants: isPublic ? participantCount : 0,
+        deadline: hasDeadline ? selectedDate.toISOString() : null,
+        bookIsbn: isbn || bookData?.isbn || null,
+        bookTitle: displayTitle || null,
+        bookAuthor: displayAuthor || null,
+        bookCover: displayCover || null,
+        createdBy: uid || null,
+      });
+      onNext?.({ roomId, roomCode, roomName });
+    } catch {
+      // 생성 실패 시 무시 (향후 toast 추가 가능)
+    } finally {
+      setIsCreating(false);
     }
   };
 
-  const handleFriendScroll = (event) => {
-    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-    const scrollX = contentOffset.x;
-    const scrollWidth = contentSize.width;
-    const viewWidth = layoutMeasurement.width;
-
-    const isScrollable = scrollWidth > viewWidth;
-    const isAtStart = scrollX <= 5; // 5px threshold
-    const isAtEnd = scrollX >= scrollWidth - viewWidth - 5; // 5px threshold
-
-    setFriendScrollState({
-      isScrollable,
-      showLeftGradient: isScrollable && !isAtStart,
-      showRightGradient: isScrollable && !isAtEnd,
-    });
-  };
-
-  const handleFriendScrollLayout = (event) => {
-    const { width } = event.nativeEvent.layout;
-    // Calculate content width: 66px per item + 4px gap between items + 16px padding
-    const contentWidth = invitedFriends.length * 66 + Math.max(0, invitedFriends.length - 1) * 4 + 16;
-    const isScrollable = contentWidth > width;
-
-    setFriendScrollState({
-      isScrollable,
-      showLeftGradient: false,
-      showRightGradient: isScrollable,
-    });
+  const handleClosePress = () => setShowCloseModal(true);
+  const handleConfirmClose = () => {
+    setShowCloseModal(false);
+    onBack?.();
   };
 
   const handleDateChange = (event, date) => {
-    setShowDatePicker(Platform.OS === 'ios'); // iOS는 모달로 유지
-    if (date) {
-      setSelectedDate(date);
-    }
+    setShowDatePicker(Platform.OS === 'ios');
+    if (date) setSelectedDate(date);
   };
 
   const formatDate = (date) => {
@@ -136,7 +161,6 @@ export default function CreateReadingRoom({
     return `${year}년 ${month}월 ${day}일 까지`;
   };
 
-  // Calculate header opacity based on scroll position
   const headerOpacity = scrollY.interpolate({
     inputRange: [0, 100],
     outputRange: [0, 1],
@@ -156,58 +180,60 @@ export default function CreateReadingRoom({
         )}
         scrollEventThrottle={16}
       >
-        {/* Top Section with Book Cover and Info */}
         <BookTopSection
-          bookTitle={bookTitle}
-          bookSubtitle={bookSubtitle}
-          author={author}
-          coverImage={coverImage}
+          bookTitle={displayTitle}
+          bookSubtitle={displaySubtitle}
+          author={displayAuthor}
+          coverImage={displayCover}
           paddingTop={insets.top + 67}
+          isLoading={isLoading}
         />
 
-        {/* Form Section */}
         <View style={styles.formSection}>
-          {/* Room Name */}
-          <View style={styles.formField}>
-            <SectionTitle style={styles.sectionTitle}>도토리룸 명</SectionTitle>
+          {/* 룸 이름 */}
+          <View>
+            <SectionTitle required>도토리룸 명</SectionTitle>
             <TextField
               value={roomName}
-              onChangeText={setRoomName}
+              onChangeText={(text) => {
+                const filtered = text.replace(/[^가-힣a-zA-Z0-9 !?.]/g, '');
+                if (filtered.length > 20) return;
+                hasEditedRoomName.current = true;
+                setRoomNameError(false);
+                setRoomName(filtered);
+              }}
+              error={roomNameError}
+              helpText="20자 이하로 입력해주세요. (!?.만 허용)"
               placeholder="룸 이름을 입력하세요"
-              style={styles.textField}
             />
           </View>
 
-          {/* Public/Private Toggle */}
-          <View style={styles.formField}>
+          {/* 공개/비공개 */}
+          <View>
             <View style={styles.toggleRow}>
               <View style={styles.toggleTextContainer}>
-                <SectionTitle style={styles.sectionTitle}>도토리 룸 공개</SectionTitle>
+                <SectionTitle>도토리 룸 공개</SectionTitle>
                 <Text style={styles.helpText}>* 자유롭게 참여하고 독후감을 볼 수 있습니다.</Text>
               </View>
               <Switch value={isPublic} onValueChange={setIsPublic} />
             </View>
           </View>
 
-          {/* Participant Count - Only show when public */}
+          {/* 인원 (공개일 때만) */}
           {isPublic && (
-            <View style={styles.formField}>
-              <SectionTitle style={styles.sectionTitle}>인원</SectionTitle>
+            <View>
+              <SectionTitle required>인원</SectionTitle>
               <View style={styles.participantRow}>
                 <View style={styles.participantInputContainer}>
                   <TextField
                     value={String(participantCount)}
                     onChangeText={(text) => {
                       const num = parseInt(text, 10);
-                      if (!isNaN(num) && num >= 0) {
-                        setParticipantCount(num);
-                      } else if (text === '') {
-                        setParticipantCount(0);
-                      }
+                      if (!isNaN(num) && num >= 0) setParticipantCount(num);
+                      else if (text === '') setParticipantCount(0);
                     }}
                     placeholder="0"
                     keyboardType="numeric"
-                    style={styles.participantTextField}
                   />
                   <Text style={styles.helpText}>* 자신을 포함한 명 수, 0명 : 제한 없음</Text>
                 </View>
@@ -223,72 +249,25 @@ export default function CreateReadingRoom({
             </View>
           )}
 
-          {/* Duration */}
-          <View style={styles.formField}>
-            <SectionTitle style={styles.sectionTitle}>기간</SectionTitle>
-            <TouchableOpacity
-              style={styles.dateField}
-              onPress={() => setShowDatePicker(true)}
-            >
-              <CalendarIcon width={24} height={24} color={Colors.gray700} />
-              <Text style={styles.dateText}>{formatDate(selectedDate)}</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Friend Invite */}
-          <View style={styles.formField}>
-            <SectionTitle style={styles.sectionTitle}>친구 초대</SectionTitle>
-            <View style={styles.friendInviteContainer}>
-              <TouchableOpacity style={styles.addFriendButton}>
-                <PlusIcon width={24} height={24} color={Colors.gray700} />
-              </TouchableOpacity>
-              {invitedFriends.length > 0 && (
-                <View style={styles.friendListWrapper} onLayout={handleFriendScrollLayout}>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.friendListContent}
-                    style={styles.friendList}
-                    onScroll={handleFriendScroll}
-                    scrollEventThrottle={16}
-                  >
-                    {invitedFriends.map((friend) => (
-                      <InvitedUserItem
-                        key={friend.id}
-                        nickname={friend.nickname}
-                        imageUri={friend.imageUri}
-                        onRemove={() => handleRemoveFriend(friend.id)}
-                      />
-                    ))}
-                  </ScrollView>
-                  {/* Left Gradient */}
-                  {friendScrollState.showLeftGradient && (
-                    <LinearGradient
-                      colors={['rgba(255, 255, 255, 1)', 'rgba(255, 255, 255, 0)']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={styles.friendListGradientLeft}
-                      pointerEvents="none"
-                    />
-                  )}
-                  {/* Right Gradient */}
-                  {friendScrollState.showRightGradient && (
-                    <LinearGradient
-                      colors={['rgba(255, 255, 255, 0)', 'rgba(255, 255, 255, 1)']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={styles.friendListGradientRight}
-                      pointerEvents="none"
-                    />
-                  )}
-                </View>
-              )}
+          {/* 기간 */}
+          <View>
+            <View style={styles.toggleRow}>
+              <SectionTitle>기간</SectionTitle>
+              <Switch value={hasDeadline} onValueChange={setHasDeadline} />
             </View>
+            {hasDeadline && (
+              <TouchableOpacity
+                style={styles.dateField}
+                onPress={() => setShowDatePicker(true)}
+              >
+                <CalendarIcon width={24} height={24} color={Colors.gray700} />
+                <Text style={styles.dateText}>{formatDate(selectedDate)}</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       </ScrollView>
 
-      {/* Date Picker */}
       {showDatePicker && (Platform.OS === 'ios' ? (
         <DatePickerModal
           visible={showDatePicker}
@@ -308,7 +287,6 @@ export default function CreateReadingRoom({
         />
       ))}
 
-      {/* Header */}
       <DefaultHeader
         title="같이 읽기"
         gradientOpacity={headerOpacity}
@@ -317,7 +295,6 @@ export default function CreateReadingRoom({
         onMenu={handleClosePress}
       />
 
-      {/* Close Confirmation Modal */}
       <ModalPopup
         visible={showCloseModal}
         title="도토리룸 만들기를 취소할까요?"
@@ -328,15 +305,14 @@ export default function CreateReadingRoom({
         onClose={() => setShowCloseModal(false)}
       />
 
-      {/* Bottom Button */}
       <SafeAreaView style={styles.bottomContainer} edges={['bottom']}>
         <LinearGradient
-            colors={['rgba(255,255,255,0.00)', 'rgba(255,255,255,0.84)', '#FFFFFF']}
-            locations={[0, 0.4451, 1]}
-            style={styles.bottomGradient}
-          >
-          <Button variant="primary" size="xlarge" onPress={onNext} disabled={!isNextButtonEnabled} style={styles.nextButton}>
-            만들기
+          colors={['rgba(255,255,255,0.00)', 'rgba(255,255,255,0.84)', '#FFFFFF']}
+          locations={[0, 0.4451, 1]}
+          style={styles.bottomGradient}
+        >
+          <Button variant="primary" size="xxlarge" onPress={handleNext} disabled={isCreating} style={styles.nextButton}>
+            {isCreating ? '만드는 중...' : '만들기'}
           </Button>
         </LinearGradient>
       </SafeAreaView>
@@ -367,28 +343,25 @@ const styles = StyleSheet.create({
   },
   toggleTextContainer: {
     flex: 1,
-    gap: Spacing.xs,
+    // gap: Spacing.xs,
   },
   helpText: {
     ...Typography.caption1Regular,
     color: Colors.gray600,
-    paddingLeft:Spacing.sm
+    paddingLeft: Spacing.sm,
   },
   participantRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Spacing.sm,
+    marginTop: Spacing.sm,
   },
   participantInputContainer: {
     flex: 1,
     gap: Spacing.xs,
   },
-  participantTextField: {
-    marginTop: 0,
-  },
   counterButtons: {
     flexDirection: 'row',
-    gap: 0,
     borderRadius: BorderRadius.md,
     borderWidth: 1,
     borderColor: Colors.gray200,
@@ -402,50 +375,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     height: 48,
     gap: Spacing.sm,
+    marginTop: Spacing.sm,
   },
   dateText: {
     ...Typography.body1Regular,
     fontSize: 15,
     color: Colors.gray900,
-  },
-  friendInviteContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Spacing.lg,
-    marginTop: Spacing.sm,
-  },
-  addFriendButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 18,
-    backgroundColor: Colors.bg50,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  friendListWrapper: {
-    flex: 1,
-    position: 'relative',
-  },
-  friendList: {
-    flex: 1,
-  },
-  friendListContent: {
-    gap: 4,
-  },
-  friendListGradientLeft: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 40,
-  },
-  friendListGradientRight: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    bottom: 0,
-    width: 40,
   },
   bottomContainer: {
     position: 'absolute',

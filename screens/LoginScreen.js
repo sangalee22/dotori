@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Alert,
-  Platform, Animated, Image,
+  Platform, Animated, Image, UIManager,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -15,7 +15,12 @@ import { ShapeStar, ShapeMint, ShapeMoon, ShapePink, ShapeRed, ShapeYellow } fro
 import { BlurView } from 'expo-blur';
 import Svg, { Path } from 'react-native-svg';
 
-import MaskedView from '@react-native-masked-view/masked-view';
+let MaskedView = null;
+try {
+  if (UIManager.hasViewManagerConfig?.('RNCMaskedView')) {
+    MaskedView = require('@react-native-masked-view/masked-view').default;
+  }
+} catch {}
 import { loginWithKakao, loginWithGoogle, loginWithApple, getGoogleRedirectResult } from '../services/auth';
 import ModalPopup from '../components/ModalPopup';
 import * as Google from 'expo-auth-session/providers/google';
@@ -203,57 +208,57 @@ export default function LoginScreen({ onLogin, onSignUp, onDevBypass, onDevOnboa
           {/* 300×300 일러스트 씬 */}
           <View style={styles.scene}>
             {/* ShapeStar × 2 */}
-            <Animated.View style={[styles.shape, { top: SCENE * 0.18, left: SCENE * 0.25 }, parallax(22, '20deg')]}>
+            <Animated.View style={[styles.shape, { top: SCENE * 0.12 - 10, left: SCENE * 0.25 }, parallax(22, '20deg')]}>
               <ShapeStar size={25} />
             </Animated.View>
-            <Animated.View style={[styles.shape, { top: SCENE * 0.73, left: SCENE * 0.45 }, parallax(16, '-12deg')]}>
+            <Animated.View style={[styles.shape, { top: SCENE * 0.73 - 10, left: SCENE * 0.45 }, parallax(16, '-12deg')]}>
               <ShapeStar size={17} />
             </Animated.View>
 
             {/* ShapeMint × 2 */}
-            <Animated.View style={[styles.shape, { top: SCENE * 0.53, left: SCENE * 0.62 }, parallax(14, '30deg')]}>
+            <Animated.View style={[styles.shape, { top: SCENE * 0.45 - 10, left: SCENE * 0.70 }, parallax(14, '30deg')]}>
               <ShapeMint size={23} />
             </Animated.View>
-            <Animated.View style={[styles.shape, { top: SCENE * 0.77, left: SCENE * 0.15 }, parallax(20, '-25deg')]}>
+            <Animated.View style={[styles.shape, { top: SCENE * 0.80 - 10, left: SCENE * 0.10 }, parallax(20, '-25deg')]}>
               <ShapeMint size={16} />
             </Animated.View>
 
             {/* ShapePink × 2 */}
-            <Animated.View style={[styles.shape, { top: SCENE * 0.64, left: SCENE * 0.23 }, parallax(18, '15deg')]}>
+            <Animated.View style={[styles.shape, { top: SCENE * 0.64 - 10, left: SCENE * 0.10 }, parallax(18, '15deg')]}>
               <ShapePink size={17} />
             </Animated.View>
-            <Animated.View style={[styles.shape, { top: SCENE * 0.10, left: SCENE * 0.45 }, parallax(12, '-20deg')]}>
+            <Animated.View style={[styles.shape, { top: SCENE * 0.10 - 10, left: SCENE * 0.45 }, parallax(12, '-20deg')]}>
               <ShapePink size={14.4} />
             </Animated.View>
 
             {/* ShapeMoon × 2 */}
-            <Animated.View style={[styles.shape, { top: SCENE * 0.35, left: SCENE * 0.37 }, parallax(16, '-35deg')]}>
+            <Animated.View style={[styles.shape, { top: SCENE * 0.25 - 10, left: SCENE * 0.25 }, parallax(16, '-35deg')]}>
               <ShapeMoon size={24} />
             </Animated.View>
-            <Animated.View style={[styles.shape, { top: SCENE * 0.75, left: SCENE * 0.70 }, parallax(22, '40deg')]}>
+            <Animated.View style={[styles.shape, { top: SCENE * 0.75 - 10, left: SCENE * 0.80 }, parallax(22, '40deg')]}>
               <ShapeMoon size={21} />
             </Animated.View>
 
             {/* ShapeRed × 2 */}
-            <Animated.View style={[styles.shape, { top: SCENE * 0.45, left: SCENE * 0.80 }, parallax(24, '10deg')]}>
+            <Animated.View style={[styles.shape, { top: SCENE * 0.38 - 10, left: SCENE * 0.90 }, parallax(24, '10deg')]}>
               <ShapeRed size={20.5} />
             </Animated.View>
-            <Animated.View style={[styles.shape, { top: SCENE * 0.28, left: SCENE * 0.60 }, parallax(14, '-18deg')]}>
+            <Animated.View style={[styles.shape, { top: SCENE * 0.28 - 10, left: SCENE * 0.60 }, parallax(14, '-18deg')]}>
               <ShapeRed size={13.8} />
             </Animated.View>
 
             {/* ShapeYellow × 2 */}
-            <Animated.View style={[styles.shape, { top: SCENE * 0.20, left: SCENE * 0.70 }, parallax(12, '25deg')]}>
+            <Animated.View style={[styles.shape, { top: SCENE * 0.17 - 10, left: SCENE * 0.80 }, parallax(12, '25deg')]}>
               <ShapeYellow size={11.7} />
             </Animated.View>
-            <Animated.View style={[styles.shape, { top: SCENE * 0.45, left: SCENE * 0.16 }, parallax(20, '-10deg')]}>
+            <Animated.View style={[styles.shape, { top: SCENE * 0.45 - 10, left: SCENE * 0.08 }, parallax(20, '-10deg')]}>
               <ShapeYellow size={16} />
             </Animated.View>
 
             {/* 심볼: 책 중앙 뒤에 */}
-            <View style={{ position: 'absolute', left: BK_LEFT + BOOK_W / 2 - 23, top: BK_TOP + BOOK_H / 2 - 80 }}>
+            <Animated.View style={[styles.shape, { left: BK_LEFT + BOOK_W / 2 - 23, top: BK_TOP + BOOK_H / 2 - 130 }, parallax(18)]}>
               <SimbolFillIcon width={46} height={46} fillColor="#7F59D6" strokeColor="#3D3941" />
-            </View>
+            </Animated.View>
 
             {/* 블러: 책 모양으로 마스킹 (Build #24 이후 활성화) */}
             {MaskedView && <MaskedView

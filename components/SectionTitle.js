@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Colors, Typography, Spacing } from '../styles';
+import RequiredDot from './RequiredDot';
 
 /**
  * SectionTitle Component
@@ -8,10 +9,11 @@ import { Colors, Typography, Spacing } from '../styles';
  * @param {number|string} count - Optional count to display on the right
  * @param {object} style - Additional style overrides
  */
-export default function SectionTitle({ children, count, style }) {
+export default function SectionTitle({ children, count, required, style }) {
   return (
     <View style={[styles.container, style]}>
       <Text style={styles.title}>{children}</Text>
+      {required && <RequiredDot />}
       {count !== undefined && count !== null && (
         <Text style={styles.count}>{count}</Text>
       )}
@@ -22,8 +24,8 @@ export default function SectionTitle({ children, count, style }) {
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.xs,
+    alignItems: 'flex-start',
+    gap: Spacing.xxs,
     height: 32,
     paddingLeft: Spacing.sm,
     paddingVertical: Spacing.xs,
@@ -36,5 +38,6 @@ const styles = StyleSheet.create({
     ...Typography.body1ExtraBold,
     color: Colors.primary900,
     marginTop: 2,
+    marginLeft: Spacing.xs,
   },
 });

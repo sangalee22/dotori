@@ -226,6 +226,32 @@ export async function createRoom(data) {
   });
 }
 
+// 규칙: 알파벳 대문자 3자(I·O 제외) + 숫자 3자 → 예: "ABK492"
+// I, O 제외로 숫자와 혼동 방지
+async function generateUniqueRoomCode() {
+  const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const digits = '0123456789';
+  let code, exists = true;
+  while (exists) {
+    code = Array.from({ length: 3 }, () => letters[Math.floor(Math.random() * letters.length)]).join('')
+         + Array.from({ length: 3 }, () => digits[Math.floor(Math.random() * digits.length)]).join('');
+    const snap = await getDocs(query(collection(db, 'rooms'), where('roomCode', '==', code)));
+    exists = !snap.empty;
+  }
+  return code;
+}
+
+export async function createRoomWithCode(data) {
+  const roomCode = await generateUniqueRoomCode();
+  const ref = await addDoc(collection(db, 'rooms'), {
+    ...data,
+    roomCode,
+    participantCount: 1,
+    createdAt: serverTimestamp(),
+  });
+  return { id: ref.id, roomCode };
+}
+
 export async function joinRoom(roomId, userId) {
   const id = `${roomId}_${userId}`;
   await setDoc(doc(db, 'roomParticipants', id), {

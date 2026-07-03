@@ -409,6 +409,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
         elapsedBase: elapsedBaseRef.current,
         selectedBook,
         readingStartPage,
+        selectedBookTotalPages,
         readingStartTime: readingStartTime?.toISOString() ?? null,
       })).catch(() => {});
     } else {
@@ -427,6 +428,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
           elapsedBase: elapsedBaseRef.current,
           selectedBook,
           readingStartPage,
+          selectedBookTotalPages,
           readingStartTime: readingStartTime?.toISOString() ?? null,
         })).catch(() => {});
       }
@@ -445,6 +447,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
           elapsedBase: elapsedBaseRef.current,
           selectedBook: timerBook,
           readingStartPage,
+          selectedBookTotalPages,
           readingStartTime: readingStartTime?.toISOString() ?? null,
         })).catch(() => {});
       } else if (next === 'active' && isPlaying && sessionStartTsRef.current) {
@@ -485,9 +488,10 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
         // 진행 중이거나 일시정지 상태였던 타이머 복원
         const stored = await AsyncStorage.getItem('timerState');
         if (!stored) return;
-        const { isPlaying: wasPlaying, sessionStartTs, elapsedBase, selectedBook: savedBook, readingStartPage: savedStartPage, readingStartTime: savedStartTime } = JSON.parse(stored);
+        const { isPlaying: wasPlaying, sessionStartTs, elapsedBase, selectedBook: savedBook, readingStartPage: savedStartPage, selectedBookTotalPages: savedTotalPages, readingStartTime: savedStartTime } = JSON.parse(stored);
         if (savedBook) { setSelectedBook(savedBook); setTimerBook(savedBook); }
         if (savedStartPage !== undefined) setReadingStartPage(savedStartPage);
+        if (savedTotalPages !== undefined) { setSelectedBookTotalPages(savedTotalPages); setTimerBookTotalPages(savedTotalPages); }
         if (savedStartTime) setReadingStartTime(new Date(savedStartTime));
         if ((wasPlaying || (wasPlaying === undefined && sessionStartTs)) && sessionStartTs) {
           // 실행 중이었던 경우 → 종료된 동안 경과 시간 포함해 재개

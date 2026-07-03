@@ -22,7 +22,7 @@ export default function SplashScreen({ onFinish }) {
       <View style={styles.content}>
         {/* Logo */}
         <View style={styles.logoContainer}>
-          <SimbolFillIcon width={32} height={32} fillColor="#B284E7" strokeColor="#3D3941" />
+          <SimbolFillIcon width={32} height={32} fillColor="#7F59D6" strokeColor="#3D3941" />
           <LogoTextIcon width={108} height={22} color="#3D3941" />
         </View>
       </View>
@@ -44,7 +44,7 @@ const styles = StyleSheet.create({
   },
   logoContainer: {
     alignItems: 'center',
-    gap: Spacing.xs,
+    gap: Spacing.sm,
   },
   subtitle: {
     ...Typography.headline3Medium,

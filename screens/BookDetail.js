@@ -12,6 +12,7 @@ import Button from '../components/Button';
 import SubTab from '../components/SubTab';
 import SimbolOutlineIcon from '../components/SimbolOutlineIcon';
 import SimbolFillIcon from '../components/SimbolFillIcon';
+import PlusFillIcon from '../components/PlusFillIcon';
 import CommentIcon from '../components/CommentIcon';
 import CommentLargeIcon from '../components/CommentLargeIcon';
 import ReviewItem from '../components/ReviewItem';
@@ -1219,17 +1220,22 @@ export default function BookDetail({
       {/* Default Header */}
       <DefaultHeader
         onBack={handleBack}
-        onMenu={handleFavoriteToggle}
         title={displayTitle}
         titleOpacity={headerOpacity}
         gradientOpacity={headerOpacity}
-        rightButton={
-          isFavorite ? (
-            <SimbolFillIcon width={24} height={24} />
-          ) : (
-            <SimbolOutlineIcon width={24} height={24} color={Colors.gray800} />
-          )
-        }
+        rightButtons={[
+          ...((__DEV__ && onCreateRoom) ? [
+            <IconButton key="createRoom" onPress={onCreateRoom}>
+              <PlusFillIcon width={24} height={24} />
+            </IconButton>
+          ] : []),
+          <IconButton key="favorite" onPress={handleFavoriteToggle}>
+            {isFavorite
+              ? <SimbolFillIcon width={24} height={24} />
+              : <SimbolOutlineIcon width={24} height={24} color={Colors.gray800} />
+            }
+          </IconButton>,
+        ]}
       />
 
       {/* Page Edit Modal */}
@@ -1481,7 +1487,7 @@ export default function BookDetail({
 
               {/* Bottom Button Section - Fixed above keyboard */}
               <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 keyboardVerticalOffset={0}
               >
                 <View style={styles.reviewBottomSection}>

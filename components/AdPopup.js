@@ -6,7 +6,9 @@ const hasGoogleAds = !!NativeModules.RNGoogleMobileAdsModule;
 import { Colors, Typography, Spacing, BorderRadius } from '../styles';
 
 const TEST_UNIT_ID = 'ca-app-pub-3940256099942544/6300978111';
-const PROD_UNIT_ID = 'ca-app-pub-9552392941451192/6095521087';
+const PROD_UNIT_ID = Platform.OS === 'android'
+  ? 'ca-app-pub-9552392941451192/1220365284'
+  : 'ca-app-pub-9552392941451192/6095521087';
 const UNIT_ID = __DEV__ ? TEST_UNIT_ID : PROD_UNIT_ID;
 
 const SKIP_KEY = 'adPopup_skipDate';

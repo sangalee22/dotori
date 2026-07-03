@@ -28,8 +28,14 @@ import OnboardingScreen from './screens/OnboardingScreen';
 import WeeklyBestDetail from './screens/WeeklyBestDetail';
 import DotoriRoomListScreen from './screens/DotoriRoomListScreen';
 import DotoriRoomScreen from './screens/DotoriRoomScreen';
+import CreateReadingRoom from './screens/CreateReadingRoom';
+import RoomCreatedScreen from './screens/RoomCreatedScreen';
+import RoomFeed from './screens/RoomFeed';
 import MyScreen from './screens/MyScreen';
 import ModalPopup from './components/ModalPopup';
+import SimbolFillIcon from './components/SimbolFillIcon';
+import NowLeadNull from './components/NowLeadNull';
+import GyroBookCover from './components/GyroBookCover';
 import TextField from './components/TextField';
 import PopupHeader from './components/PopupHeader';
 import AdPopup from './components/AdPopup';
@@ -150,8 +156,9 @@ export default function App() {
       Animated.timing(logoHeightAnim, { toValue: 60, duration: 200, useNativeDriver: false }).start();
     }
   }, []);
-  const [currentView, setCurrentView] = React.useState('home'); // 'home', 'bookDetail', 'search'
-  const [previousView, setPreviousView] = React.useState('home'); // Track previous view for back navigation
+  const [currentView, setCurrentView] = React.useState('home'); // 'home', 'bookDetail', 'search', __DEV__: 'createRoom', 'roomCreated', 'roomFeed'
+  const [previousView, setPreviousView] = React.useState('home');
+  const [createdRoom, setCreatedRoom] = React.useState(null); // { roomId, roomCode, roomName }
   const [selectedBook, setSelectedBook] = React.useState(null);
   const openReadingModalRef = React.useRef(null);
   const [recentBooks, setRecentBooks] = React.useState([]); // Store recently viewed books
@@ -915,6 +922,11 @@ export default function App() {
 
   const currentReadingBook = activeReadingBooks[0] ?? null;
 
+  React.useEffect(() => {
+    nowReadingScrollX.setValue(0);
+  }, [activeReadingBooks.length]);
+
+
   const getBookTotalPages = (book) => {
     if (!book) return 0;
     if (book.totalPages > 0) return book.totalPages;
@@ -1377,17 +1389,19 @@ export default function App() {
                       >
                         <View style={styles.nowReadingRow}>
                           <Animated.View style={[styles.nowReadingCoverShadow, { transform: [{ translateX: coverTranslateX }, { scale: coverScale }] }]}>
-                            <View style={styles.nowReadingCover}>
-                              {book.coverImage ? (
-                                <Image
-                                  source={typeof book.coverImage === 'string' ? { uri: book.coverImage } : book.coverImage}
-                                  style={styles.bookCoverPlaceholder}
-                                  resizeMode="cover"
-                                />
-                              ) : (
-                                <View style={styles.bookCoverPlaceholder} />
-                              )}
-                            </View>
+                              <View style={styles.nowReadingCover}>
+                                <GyroBookCover range={12}>
+                                  {book.coverImage ? (
+                                    <Image
+                                      source={typeof book.coverImage === 'string' ? { uri: book.coverImage } : book.coverImage}
+                                      style={styles.bookCoverPlaceholder}
+                                      resizeMode="cover"
+                                    />
+                                  ) : (
+                                    <View style={styles.bookCoverPlaceholder} />
+                                  )}
+                                </GyroBookCover>
+                              </View>
                           </Animated.View>
                           <View style={styles.nowReadingCard}>
                             <Text style={styles.bookTitle} numberOfLines={2}>{book.title ? book.title.split(' - ')[0].trim() : ''}</Text>
@@ -1419,17 +1433,14 @@ export default function App() {
                 </ScrollView>
               ) : (
                 <View style={styles.nowReadingNull}>
-                  <Image
-                    source={nowReadingNull}
-                    style={[
-                      styles.nowReadingNullImage,
-                      windowWidth < 320 && {
-                        width: windowWidth,
-                        height: windowWidth * (110 / 320),
-                      }
-                    ]}
-                    resizeMode="contain"
-                  />
+                  <View style={styles.nowReadingNullBg}>
+                    <GyroBookCover range={16}>
+                      <NowLeadNull width={308} height={194} />
+                    </GyroBookCover>
+                  </View>
+                  <SimbolFillIcon width={40} height={40} fillColor={Colors.primary400} strokeColor={Colors.gray900} />
+                  <View style={{ height: Spacing.md }} />
+                  <Text style={styles.nowReadingNullText}>아직 읽고있는 책이 없어요!</Text>
                 </View>
               )}
             </View>
@@ -1766,6 +1777,11 @@ export default function App() {
             <MainHeader
               onSearch={() => setCurrentView('search')}
               logoHeightAnim={activeBottomTab === 'dotoriRoom' ? logoHeightAnim : undefined}
+              rightButton={__DEV__ && activeBottomTab === 'dotoriRoom' ? (
+                <TouchableOpacity onPress={() => setCurrentView('createRoom')} style={{ paddingHorizontal: 12, paddingVertical: 8 }}>
+                  <Text style={{ fontSize: 22, color: Colors.primary500 }}>＋</Text>
+                </TouchableOpacity>
+              ) : undefined}
             />
           </SafeAreaView>
         </View>
@@ -1869,6 +1885,10 @@ export default function App() {
             currentUser={currentUser}
             blockedUserIds={blockedUserIds}
             onBlock={handleBlockUser}
+            onCreateRoom={__DEV__ ? () => {
+              setPreviousView(currentView);
+              setCurrentView('createRoom');
+            } : undefined}
             initialReadingState={readingBookData ? {
               isReading: true,
               isCompleted: readingBookData.isCompleted || false,
@@ -1982,6 +2002,50 @@ export default function App() {
         </View>
       )}
 
+      {/* [DEV ONLY] 방만들기 */}
+      {__DEV__ && currentView === 'createRoom' && (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 500 }}>
+          <CreateReadingRoom
+            isbn={selectedBook?.isbn}
+            bookTitle={selectedBook?.title}
+            author={selectedBook?.author}
+            coverImage={selectedBook?.coverImage}
+            onBack={() => setCurrentView(previousView)}
+            onNext={(data) => {
+              setCreatedRoom(data);
+              setCurrentView('roomCreated');
+            }}
+          />
+        </View>
+      )}
+
+      {__DEV__ && currentView === 'roomCreated' && createdRoom && (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 500 }}>
+          <RoomCreatedScreen
+            isbn={selectedBook?.isbn}
+            bookTitle={selectedBook?.title}
+            bookSubtitle={selectedBook?.subtitle}
+            author={selectedBook?.author}
+            coverImage={selectedBook?.coverImage}
+            roomName={createdRoom.roomName}
+            roomCode={createdRoom.roomCode}
+            onDone={() => {
+              setCreatedRoom(null);
+              setCurrentView(previousView);
+            }}
+          />
+        </View>
+      )}
+
+      {/* [DEV ONLY] 룸 피드 */}
+      {__DEV__ && currentView === 'roomFeed' && (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 500 }}>
+          <RoomFeed
+            onBack={() => setCurrentView('createRoom')}
+          />
+        </View>
+      )}
+
       </View>
       </ToastProvider>
     </SafeAreaProvider>
@@ -2054,6 +2118,7 @@ const styles = StyleSheet.create({
   nowReadingCoverShadow: {
     zIndex: 2,
     marginRight: -85,
+    marginTop: -12,
     borderRadius: BorderRadius.sm,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -2081,12 +2146,24 @@ const styles = StyleSheet.create({
     // marginRight: Spacing.xs,
   },
   nowReadingNull: {
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'center',
+    paddingTop: 64,
+    paddingBottom: 54,
+    marginHorizontal: Spacing.md,
+    backgroundColor: Colors.gray50,
+    borderRadius: BorderRadius.huge,
+    overflow: 'hidden',
   },
-  nowReadingNullImage: {
-    width: 320, // Fixed width
-    height: 110, // Fixed height
+  nowReadingNullBg: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+    top: -60,
+  },
+  nowReadingNullText: {
+    ...Typography.subtitle1Medium,
+    color: Colors.gray900,
   },
   bookCoverSmall: {
     width: 103,
