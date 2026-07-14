@@ -1059,20 +1059,37 @@ export default function App() {
     if (reviews.length === 0) return;
     const loadBestReviews = async () => {
       const { from, to } = getLastWeekRange();
-      let candidates = reviews
-        .filter(r => {
-          const d = new Date(r.createdAt);
-          return d >= from && d <= to;
-        })
+
+      // isbn 기준 중복 제거: 좋아요 많은 것 → 최신 순
+      const deduplicateByBook = (list) => {
+        const byIsbn = {};
+        for (const r of list) {
+          const key = r.bookIsbn || r.id;
+          if (!byIsbn[key]) {
+            byIsbn[key] = r;
+          } else {
+            const cur = byIsbn[key];
+            const curLikes = cur.likes?.length || 0;
+            const newLikes = r.likes?.length || 0;
+            if (newLikes > curLikes || (newLikes === curLikes && new Date(r.createdAt) > new Date(cur.createdAt))) {
+              byIsbn[key] = r;
+            }
+          }
+        }
+        return Object.values(byIsbn);
+      };
+
+      let candidates = deduplicateByBook(
+        reviews.filter(r => { const d = new Date(r.createdAt); return d >= from && d <= to; })
+      )
         .sort((a, b) => (b.likes?.length || 0) - (a.likes?.length || 0))
         .slice(0, 6);
 
       // 지난주 리뷰가 부족하면 전체에서 좋아요 순으로 fallback
       if (candidates.length < 6) {
-        const fallback = reviews
+        candidates = deduplicateByBook(reviews)
           .sort((a, b) => (b.likes?.length || 0) - (a.likes?.length || 0))
           .slice(0, 6);
-        candidates = fallback;
       }
 
 
@@ -1215,7 +1232,12 @@ export default function App() {
                   setReadingBooks([]);
                   setWantToReadBooks([]);
                   setReadingRecords([]);
+                  setReviews([]);
+                  setRecentBooks([]);
                   setBookCache({});
+                  setBlockedUserIds([]);
+                  setFeedTab('all');
+                  userProfileCacheRef.current = {};
                   setCurrentUser(userData);
                   const fbReviews = await getReviews().catch(() => []);
                   if (fbReviews.length > 0) setReviews(await enrichWithProfiles(fbReviews.map(normalizeReview)));
@@ -1253,9 +1275,12 @@ export default function App() {
             setRecentBooks([]);
             setRecentSearches([]);
             setBookCache({});
+            setBlockedUserIds([]);
+            setFeedTab('all');
+            userProfileCacheRef.current = {};
             const [userData, fbReviews, fbReadingBooks, fbCompletedBooks, fbWantBooks, fbRecords] = await Promise.all([
-              getUser(userInfo.id),
-              getReviews(),
+              getUser(userInfo.id).catch(() => null),
+              getReviews().catch(() => []),
               getUserBooks(userInfo.id, 'reading').catch(() => []),
               getUserBooks(userInfo.id, 'completed').catch(() => []),
               getUserBooks(userInfo.id, 'want').catch(() => []),
@@ -1390,17 +1415,15 @@ export default function App() {
                         <View style={styles.nowReadingRow}>
                           <Animated.View style={[styles.nowReadingCoverShadow, { transform: [{ translateX: coverTranslateX }, { scale: coverScale }] }]}>
                               <View style={styles.nowReadingCover}>
-                                <GyroBookCover range={12}>
-                                  {book.coverImage ? (
-                                    <Image
-                                      source={typeof book.coverImage === 'string' ? { uri: book.coverImage } : book.coverImage}
-                                      style={styles.bookCoverPlaceholder}
-                                      resizeMode="cover"
-                                    />
-                                  ) : (
-                                    <View style={styles.bookCoverPlaceholder} />
-                                  )}
-                                </GyroBookCover>
+                                {book.coverImage ? (
+                                  <Image
+                                    source={typeof book.coverImage === 'string' ? { uri: book.coverImage } : book.coverImage}
+                                    style={styles.bookCoverPlaceholder}
+                                    resizeMode="cover"
+                                  />
+                                ) : (
+                                  <View style={styles.bookCoverPlaceholder} />
+                                )}
                               </View>
                           </Animated.View>
                           <View style={styles.nowReadingCard}>
@@ -1519,6 +1542,11 @@ export default function App() {
               contentOffset={{ x: loopOffset * carouselSnap, y: 0 }}
               style={{ height: 310, opacity: carouselReady ? 1 : 0 }}
               contentContainerStyle={{ paddingHorizontal: carouselSidePadding, alignItems: 'flex-start' }}
+              scrollEventThrottle={16}
+              onScroll={(e) => {
+                const index = Math.round(e.nativeEvent.contentOffset.x / carouselSnap);
+                if (index !== activeBestIndex) setActiveBestIndex(index);
+              }}
               onScrollBeginDrag={() => clearInterval(bestAutoSlideRef.current)}
               onMomentumScrollEnd={(e) => {
                 const len = currentBooks.length;
@@ -1743,7 +1771,12 @@ export default function App() {
                 setWantToReadBooks([]);
                 setReadingRecords([]);
                 setReviews([]);
+                setRecentBooks([]);
+                setRecentSearches([]);
                 setBookCache({});
+                setBlockedUserIds([]);
+                setFeedTab('all');
+                userProfileCacheRef.current = {};
                 setShowMySettings(false);
                 setActiveBottomTab('home');
                 setIsLoggedIn(false);
@@ -1751,6 +1784,7 @@ export default function App() {
               }}
               onWithdraw={async (reasonData) => {
                 await withdrawUser(currentUser.id, currentUser.provider, reasonData);
+                await clearLocalUserData();
                 setShowMySettings(false);
                 setActiveBottomTab('home');
                 setCurrentUser(null);
@@ -1758,6 +1792,12 @@ export default function App() {
                 setWantToReadBooks([]);
                 setReadingRecords([]);
                 setReviews([]);
+                setRecentBooks([]);
+                setRecentSearches([]);
+                setBookCache({});
+                setBlockedUserIds([]);
+                setFeedTab('all');
+                userProfileCacheRef.current = {};
                 setIsLoggedIn(false);
                 setShowSplash(true);
               }}

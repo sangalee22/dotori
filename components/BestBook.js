@@ -1,6 +1,5 @@
 import React from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
-import { BlurView } from 'expo-blur';
 import { Colors, Typography, BorderRadius, Spacing } from '../styles';
 
 export default function BestBook({
@@ -54,7 +53,6 @@ export default function BestBook({
         </View>
         <Text style={styles.inactiveTitle} numberOfLines={2} lineBreakStrategyIOS="hangul-word">{cleanTitle}</Text>
         <Text style={styles.inactiveAuthor} numberOfLines={1}>{author}</Text>
-        <BlurView intensity={10} tint="light" style={[StyleSheet.absoluteFill, { height: 310 }]} />
       </TouchableOpacity>
     );
   }

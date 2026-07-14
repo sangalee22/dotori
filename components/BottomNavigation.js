@@ -741,9 +741,15 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
       </View>
       <View style={styles.playButtonWrapper}>
         {(isPlaying || elapsed > 0) && (
-          <View style={styles.timerBox}>
+          <Pressable style={styles.timerBox} onPress={() => {
+            if (isPlaying) {
+              if (!isPauseModalVisible) setIsPauseModalVisible(true);
+            } else if (elapsed > 0) {
+              setIsPlaying(true);
+            }
+          }}>
             <Text style={styles.timerText}>{formatTime(elapsed)}</Text>
-          </View>
+          </Pressable>
         )}
         <IconButton size={52} style={styles.playButton} onPress={() => {
           if (isPlaying) {
