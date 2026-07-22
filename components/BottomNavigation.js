@@ -13,11 +13,14 @@ import PlayIcon from './PlayIcon';
 import PauseIcon from './PauseIcon';
 import DefaultHeader from './DefaultHeader';
 import CloseIcon from './CloseIcon';
+import DeleteIcon from './DeleteIcon';
+import TrashIcon from './TrashIcon';
 import TextField from './TextField';
 import EmptyState from './EmptyState';
 import ReadingBookItem from './ReadingBookItem';
 import SectionTitle from './SectionTitle';
 import BestBook from './BestBook';
+import ProgressBar from './ProgressBar';
 import ModalPopup from './ModalPopup';
 import Button from './Button';
 import { searchBooks, fetchBookDetail } from '../services/aladinApi';
@@ -27,6 +30,7 @@ import Switch from './Switch';
 import ResultStyleTab from './ResultStyleTab';
 import PopupHeader from './PopupHeader';
 import { logEvent } from '../services/analytics';
+import { useToast } from '../contexts/ToastContext';
 
 function AddRecordForm({ addRecordBook, addRecordDate, addRecordStartPage, setAddRecordStartPage, addRecordEndPage, setAddRecordEndPage, readingRecords, insets, onSave }) {
   const [hours, setHours] = React.useState('');
@@ -253,6 +257,7 @@ function MyIcon({ active }) {
  */
 export default function BottomNavigation({ activeTab = 'home', onTabPress, currentBooks = [], readingRecords = [], onUpdateReading, onWriteReview, onSaveReadingRecord, onReady, startTimerRef, style }) {
   const insets = useSafeAreaInsets();
+  const { showToast } = useToast();
   const cardCaptureRef = React.useRef(null);
   const slideAnim = React.useRef(new Animated.Value(0)).current;
   const [tabGroupWidth, setTabGroupWidth] = React.useState(0);
@@ -344,7 +349,44 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
     }
     return elapsedBaseRef.current;
   }, []);
-  const [isPauseModalVisible, setIsPauseModalVisible] = React.useState(false);
+  const [isTimerSheetVisible, setIsTimerSheetVisible] = React.useState(false);
+  const timerSheetTranslateY = React.useRef(new Animated.Value(600)).current;
+  const timerSheetPanResponder = React.useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, g) => g.dy > 5,
+      onPanResponderMove: (_, g) => { if (g.dy > 0) timerSheetTranslateY.setValue(g.dy); },
+      onPanResponderRelease: (_, g) => {
+        if (g.dy > 100) {
+          closeTimerSheet();
+        } else {
+          Animated.spring(timerSheetTranslateY, { toValue: 0, useNativeDriver: true, tension: 120, friction: 22 }).start();
+        }
+      },
+    })
+  ).current;
+  const [isCompleteConfirmVisible, setIsCompleteConfirmVisible] = React.useState(false);
+  const [isStopConfirmVisible, setIsStopConfirmVisible] = React.useState(false);
+  const [isDeleteConfirmVisible, setIsDeleteConfirmVisible] = React.useState(false);
+  const [isConflictModalVisible, setIsConflictModalVisible] = React.useState(false);
+  const pendingNewBookRef = React.useRef(null);
+  const pendingNewStartPageRef = React.useRef(0);
+  const TIMER_COVER_HEIGHT = 140;
+  const [timerCoverSize, setTimerCoverSize] = React.useState({ width: Math.round(TIMER_COVER_HEIGHT * 0.7), height: TIMER_COVER_HEIGHT });
+  const timerCoverImageUri = (timerBook || selectedBook)?.coverImage;
+  React.useEffect(() => {
+    if (!timerCoverImageUri) {
+      setTimerCoverSize({ width: Math.round(TIMER_COVER_HEIGHT * 0.7), height: TIMER_COVER_HEIGHT });
+      return;
+    }
+    Image.getSize(
+      timerCoverImageUri,
+      (w, h) => {
+        if (w && h) setTimerCoverSize({ width: Math.round(w * (TIMER_COVER_HEIGHT / h)), height: TIMER_COVER_HEIGHT });
+      },
+      () => setTimerCoverSize({ width: Math.round(TIMER_COVER_HEIGHT * 0.7), height: TIMER_COVER_HEIGHT })
+    );
+  }, [timerCoverImageUri]);
   const [isResultModalVisible, setIsResultModalVisible] = React.useState(false);
   const [resultElapsed, setResultElapsed] = React.useState(0);
   const [readingStartTime, setReadingStartTime] = React.useState(null);
@@ -357,6 +399,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
   const endPageInputRef = React.useRef(null);
   const [sessionReadingDays, setSessionReadingDays] = React.useState(1);
   const isManualResultRef = React.useRef(false);
+  const isTimerCompleteRef = React.useRef(false);
   const [timerBook, setTimerBook] = React.useState(null);
   const [timerBookTotalPages, setTimerBookTotalPages] = React.useState(0);
   const [manualResultBook, setManualResultBook] = React.useState(null);
@@ -368,6 +411,12 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
   React.useEffect(() => {
     if (startTimerRef) {
       startTimerRef.current = (book, startPage) => {
+        if ((isPlaying || elapsedBaseRef.current > 0) && timerBook) {
+          pendingNewBookRef.current = book;
+          pendingNewStartPageRef.current = startPage || 0;
+          setIsConflictModalVisible(true);
+          return;
+        }
         setSelectedBook(book);
         setTimerBook(book);
         setTimerBookTotalPages(book.totalPages || 0);
@@ -376,7 +425,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
         setTimeout(() => setIsPlaying(true), 300);
       };
     }
-  }, []);
+  }, [isPlaying, timerBook]);
 
   React.useEffect(() => {
     if (onReady) {
@@ -399,7 +448,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
   }, []);
 
   React.useEffect(() => {
-    if (isPlaying && !isPauseModalVisible) {
+    if (isPlaying) {
       sessionStartTsRef.current = Date.now();
       timerRef.current = setInterval(() => setElapsed(getCurrentElapsed()), 1000);
       AsyncStorage.removeItem('timerPendingState').catch(() => {});
@@ -434,7 +483,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
       }
     }
     return () => clearInterval(timerRef.current);
-  }, [isPlaying, isPauseModalVisible]);
+  }, [isPlaying]);
 
   // 앱 백그라운드 전환 시 timerState 저장 + 포그라운드 복귀 시 경과 시간 재계산
   React.useEffect(() => {
@@ -554,18 +603,108 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
     }
   };
 
+  const timerSheetScale = timerSheetTranslateY.interpolate({
+    inputRange: [0, 600],
+    outputRange: [1, 0.88],
+    extrapolate: 'clamp',
+  });
+
+  const openTimerSheet = () => {
+    timerSheetTranslateY.setValue(600);
+    setIsTimerSheetVisible(true);
+    Animated.spring(timerSheetTranslateY, { toValue: 0, useNativeDriver: true, tension: 120, friction: 22 }).start();
+  };
+
+  const closeTimerSheet = () => {
+    Animated.spring(timerSheetTranslateY, { toValue: 600, useNativeDriver: true, tension: 120, friction: 22 }).start(() => {
+      setIsTimerSheetVisible(false);
+    });
+  };
+
+  const closeResultModal = React.useCallback(() => {
+    setIsResultModalVisible(false);
+    setCustomCardBg(null);
+    if (isManualResultRef.current) {
+      setManualResultBook(null);
+      setManualResultTotalPages(0);
+    } else {
+      setTimerBook(null);
+      setTimerBookTotalPages(0);
+    }
+    isManualResultRef.current = false;
+    isTimerCompleteRef.current = false;
+    AsyncStorage.removeItem('timerPendingState').catch(() => {});
+    if (pendingNewBookRef.current) {
+      const book = pendingNewBookRef.current;
+      const startPage = pendingNewStartPageRef.current;
+      pendingNewBookRef.current = null;
+      pendingNewStartPageRef.current = 0;
+      setTimeout(() => {
+        setSelectedBook(book);
+        setTimerBook(book);
+        setTimerBookTotalPages(book.totalPages || 0);
+        setReadingStartTime(new Date());
+        setReadingStartPage(startPage);
+        setTimeout(() => { setIsPlaying(true); openTimerSheet(); }, 300);
+      }, 300);
+    }
+  }, []);
+
+  const handleTimerComplete = () => {
+    setIsCompleteConfirmVisible(false);
+    isTimerCompleteRef.current = true;
+    handleTimerSheetStop();
+  };
+
+  const handleTimerPause = () => {
+    setIsStopConfirmVisible(false);
+    setIsPlaying(false);
+    closeTimerSheet();
+  };
+
+  const handleTimerSheetStop = () => {
+    logEvent('timer_stop', { isbn: timerBook?.isbn, elapsed: getCurrentElapsed() });
+    const todayStr = new Date().toISOString().split('T')[0];
+    const uniqueDays = new Set(timerBook?.readingDates || []);
+    uniqueDays.add(todayStr);
+    setSessionReadingDays(uniqueDays.size);
+    setResultElapsed(getCurrentElapsed());
+    setReadingEndTime(new Date());
+    Animated.spring(timerSheetTranslateY, { toValue: 600, useNativeDriver: true, tension: 120, friction: 22 }).start(() => {
+      setIsTimerSheetVisible(false);
+      handleCloseModal();
+      setIsResultModalVisible(true);
+    });
+  };
+
+  const handleTimerReset = () => {
+    isTimerCompleteRef.current = false;
+    Animated.spring(timerSheetTranslateY, { toValue: 600, useNativeDriver: true, tension: 120, friction: 22 }).start(() => {
+      setIsTimerSheetVisible(false);
+      handleCloseModal();
+      setTimerBook(null);
+      setTimerBookTotalPages(0);
+    });
+  };
+
   const handleCloseModal = () => {
     setIsPlaying(false);
     setElapsed(0);
     elapsedBaseRef.current = 0;
     sessionStartTsRef.current = null;
     AsyncStorage.removeItem('timerState').catch(() => {});
+    AsyncStorage.removeItem('timerPendingState').catch(() => {});
     setIsModalOpen(false);
     setSearchText('');
     setSearchResults([]);
     setHasSearched(false);
     setIsSearching(false);
     setPageInput('');
+  };
+
+  const handleConflictNewRecord = () => {
+    setIsConflictModalVisible(false);
+    handleTimerSheetStop();
   };
 
   const handleStartReading = () => {
@@ -581,6 +720,8 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
     }, 250);
     setTimeout(() => {
       setIsPlaying(true);
+      openTimerSheet();
+      showToast('독서 기록을 시작했어요.');
     }, 600);
   };
 
@@ -641,7 +782,10 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
       if (isManualResultRef.current) {
         // 수동 기록은 endPage가 이미 설정되어 있으므로 입력 팝업 스킵
       } else {
-        setEndPageInput('');
+        const prefill = isTimerCompleteRef.current && timerBookTotalPages > 0
+          ? String(timerBookTotalPages)
+          : '';
+        setEndPageInput(prefill);
         setIsEndPageModalVisible(true);
         // 앱 종료 시 복원을 위해 현재 결과 상태 저장
         AsyncStorage.setItem('timerPendingState', JSON.stringify({
@@ -740,10 +884,10 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
         })}
       </View>
       <View style={styles.playButtonWrapper}>
-        {(isPlaying || elapsed > 0) && (
+        {(isPlaying || elapsed > 0) && !isTimerSheetVisible && (
           <Pressable style={styles.timerBox} onPress={() => {
             if (isPlaying) {
-              if (!isPauseModalVisible) setIsPauseModalVisible(true);
+              if (!isTimerSheetVisible) openTimerSheet();
             } else if (elapsed > 0) {
               setIsPlaying(true);
             }
@@ -753,7 +897,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
         )}
         <IconButton size={52} style={styles.playButton} onPress={() => {
           if (isPlaying) {
-            if (!isPauseModalVisible) setIsPauseModalVisible(true);
+            if (!isTimerSheetVisible) openTimerSheet();
           } else if (elapsed > 0) {
             setIsPlaying(true);
           } else {
@@ -774,33 +918,161 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
         </IconButton>
       </View>
 
-      <ModalPopup
-        visible={isPauseModalVisible}
-        title="독서를 그만할까요?"
-        description="정지해도 다음에 이어서 읽을 수 있어요"
-        primaryButtonText="정지"
-        secondaryButtonText="일시정지"
-        onPrimaryPress={() => {
-          logEvent('timer_stop', { isbn: (timerBook || selectedBook)?.isbn, elapsed: getCurrentElapsed() });
-          const todayStr = new Date().toISOString().split('T')[0];
-          const existingDates = selectedBook?.readingDates || [];
-          const uniqueDays = new Set(existingDates);
-          uniqueDays.add(todayStr);
-          setSessionReadingDays(uniqueDays.size);
-          setResultElapsed(getCurrentElapsed());
-          setReadingEndTime(new Date());
-          setIsPauseModalVisible(false);
-          handleCloseModal();
-          setIsResultModalVisible(true);
-        }}
-        onSecondaryPress={() => {
-          setIsPauseModalVisible(false);
-          setIsPlaying(false);
-        }}
-        onClose={() => setIsPauseModalVisible(false)}
-      />
+      <Modal visible={isTimerSheetVisible} transparent animationType="none" onRequestClose={closeTimerSheet}>
+        <Pressable style={[styles.timerSheetOverlay, { paddingBottom: insets.bottom + Spacing.md }]} onPress={closeTimerSheet}>
+          <Animated.View
+            style={[styles.timerSheetShadow, { transform: [{ translateY: timerSheetTranslateY }, { scale: timerSheetScale }] }]}
+            {...timerSheetPanResponder.panHandlers}
+          >
+            <View style={styles.timerSheetContainer}>
+            <Pressable onPress={() => {}} style={{ width: '100%' }}>
+              {/* 책 정보 상단 섹션 */}
+              {(() => {
+                const book = timerBook || selectedBook;
+                const fullTitle = book?.title ?? '';
+                const titleParts = fullTitle.split(' - ');
+                const displayTitle = titleParts[0].trim();
+                const displaySubtitle = titleParts.length > 1 ? titleParts.slice(1).join(' - ').trim() : undefined;
+                return (
+                  <View style={styles.timerTopSection}>
+                    {book?.coverImage ? (
+                      <Image source={{ uri: book.coverImage }} style={styles.timerTopBg} resizeMode="cover" blurRadius={20} />
+                    ) : (
+                      <View style={[styles.timerTopBg, { backgroundColor: Colors.gray100 }]} />
+                    )}
+                    <View style={styles.timerTopOverlay} />
+                    <View style={styles.timerTopContent}>
+                      <View style={{ width: timerCoverSize.width, height: timerCoverSize.height, alignSelf: 'center', borderRadius: BorderRadius.sm, overflow: 'hidden' }}>
+                        {book?.coverImage ? (
+                          <Image
+                            source={{ uri: book.coverImage }}
+                            style={{ width: timerCoverSize.width, height: timerCoverSize.height }}
+                            resizeMode="contain"
+                          />
+                        ) : (
+                          <View style={{ width: timerCoverSize.width, height: timerCoverSize.height, backgroundColor: Colors.gray50 }} />
+                        )}
+                      </View>
+                      <View style={styles.timerTopBookData}>
+                        <Text style={styles.timerTopTitle}>{displayTitle}</Text>
+                        {displaySubtitle && <Text style={styles.timerTopSubtitle}>{displaySubtitle}</Text>}
+                        <Text style={styles.timerTopAuthor}>{book?.author ?? ''}</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.timerSheetTime}>{formatTime(elapsed)}</Text>
+                  </View>
+                );
+              })()}
 
-      <Modal visible={isResultModalVisible} animationType="slide" onRequestClose={() => { setIsResultModalVisible(false); if (isManualResultRef.current) { setManualResultBook(null); setManualResultTotalPages(0); } else { setTimerBook(null); setTimerBookTotalPages(0); } isManualResultRef.current = false; }}>
+              {/* 드래그 핸들 — BookTopSection 이후 렌더로 최상단 노출 */}
+              <View style={styles.timerSheetHandleWrap} pointerEvents="none">
+                <View style={styles.timerSheetHandleBar} />
+              </View>
+
+              {/* 삭제 버튼 — BookTopSection 이후 렌더로 최상단 노출 */}
+              <IconButton size={36} style={styles.timerSheetDeleteBtn} onPress={() => setIsDeleteConfirmVisible(true)}>
+                <TrashIcon width={20} height={20} color={Colors.gray800} />
+              </IconButton>
+
+              {/* 타이머 이하 콘텐츠 */}
+              <View style={styles.timerSheetBody}>
+
+              {/* 말풍선: 앞으로 N페이지 */}
+              {timerBookTotalPages > 0 && timerBookTotalPages > readingStartPage && (
+                <View style={styles.timerSheetBubbleWrap}>
+                  <View style={styles.timerSheetBubble}>
+                    <Text style={styles.timerSheetBubbleText}>
+                      앞으로 <Text style={{ fontWeight: '700' }}>{timerBookTotalPages - readingStartPage}페이지</Text> 남았어요!
+                    </Text>
+                  </View>
+                  <Svg width={30} height={5} viewBox="0 0 30 5" style={{ alignSelf: 'flex-end' }}>
+                    <Path d="M10 0V5L0 0H10Z" fill="#17083D" />
+                  </Svg>
+                </View>
+              )}
+
+              {/* 진도 바 */}
+              <ProgressBar
+                progress={timerBookTotalPages > 0 ? Math.round(readingStartPage / timerBookTotalPages * 100) : 0}
+                leftLabel={
+                  <Text style={[Typography.body2Regular, { color: Colors.gray800 }]}>
+                    독서 진도{' '}
+                    <Text style={{ fontWeight: '700', color: Colors.gray900 }}>
+                      {timerBookTotalPages > 0 ? Math.min(100, Math.round(readingStartPage / timerBookTotalPages * 100)) : 0}%
+                    </Text>
+                  </Text>
+                }
+                rightLabel={(() => {
+                  const todayStr = new Date().toISOString().split('T')[0];
+                  const existingDates = (timerBook || selectedBook)?.readingDates || [];
+                  const uniqueDays = new Set(existingDates);
+                  uniqueDays.add(todayStr);
+                  return (
+                    <Text style={[Typography.body2Regular, { color: Colors.gray700 }]}>
+                      <Text style={{ color: Colors.primary700 }}>{uniqueDays.size}일</Text>
+                      {' '}동안 독서 중
+                    </Text>
+                  );
+                })()}
+                style={{ marginBottom: Spacing.xxl }}
+              />
+
+              {/* 완독 */}
+              <Button
+                variant="text"
+                size="medium"
+                style={styles.timerSheetCompleteBtn}
+                textStyle={{ color: Colors.gray800, textDecorationLine: 'underline' }}
+                onPress={() => setIsCompleteConfirmVisible(true)}
+              >
+                완독했어요 🎉
+              </Button>
+
+              {/* 정지 버튼 */}
+              <Button variant="outline" size="xxlarge" leftIcon={<PauseIcon />} style={styles.timerSheetStopBtn} onPress={() => setIsStopConfirmVisible(true)}>
+                정지
+              </Button>
+
+              {/* 완독 확인 팝업 */}
+              </View>{/* timerSheetBody */}
+
+              <ModalPopup
+                visible={isDeleteConfirmVisible}
+                title="기록을 삭제할까요?"
+                description="기록은 저장되지 않으며 복구하실 수 없습니다."
+                primaryButtonText="삭제"
+                secondaryButtonText="취소"
+                onPrimaryPress={() => { setIsDeleteConfirmVisible(false); handleTimerReset(); }}
+                onSecondaryPress={() => setIsDeleteConfirmVisible(false)}
+                onClose={() => setIsDeleteConfirmVisible(false)}
+              />
+
+              <ModalPopup
+                visible={isStopConfirmVisible}
+                title="기록을 그만할까요?"
+                primaryButtonText="중지"
+                secondaryButtonText="일시정지"
+                onPrimaryPress={() => { setIsStopConfirmVisible(false); handleTimerSheetStop(); }}
+                onSecondaryPress={handleTimerPause}
+                onClose={() => setIsStopConfirmVisible(false)}
+              />
+
+              <ModalPopup
+                visible={isCompleteConfirmVisible}
+                title="완독하시겠어요?"
+                primaryButtonText="완독"
+                secondaryButtonText="취소"
+                onPrimaryPress={handleTimerComplete}
+                onSecondaryPress={() => setIsCompleteConfirmVisible(false)}
+                onClose={() => setIsCompleteConfirmVisible(false)}
+              />
+            </Pressable>
+            </View>
+          </Animated.View>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={isResultModalVisible} animationType="slide" onRequestClose={closeResultModal}>
         <View style={styles.resultModalContainer}>
           <DefaultHeader
             title="독서 결과"
@@ -812,7 +1084,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
                 key="done"
                 variant="text"
                 size="large"
-                onPress={() => { setIsResultModalVisible(false); setCustomCardBg(null); if (isManualResultRef.current) { setManualResultBook(null); setManualResultTotalPages(0); } else { setTimerBook(null); setTimerBookTotalPages(0); } isManualResultRef.current = false; AsyncStorage.removeItem('timerPendingState').catch(() => {}); }}
+                onPress={closeResultModal}
               >
                 완료
               </Button>
@@ -957,32 +1229,36 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
           <ModalPopup
             visible={isEndPageModalVisible}
             title="어디까지 읽었나요?"
-            description={selectedBook?.title?.split(' - ')[0].trim()}
+            description={timerBook?.title?.split(' - ')[0].trim()}
             descriptionStyle={{ color: Colors.primary500 }}
             primaryButtonText="확인"
             hideSecondaryButton={true}
             onPrimaryPress={async () => {
+              const book = timerBook;
+              const totalPages = timerBookTotalPages;
               const endPage = parseInt(endPageInput) || 0;
+              const isCompleted = totalPages > 0 && endPage >= totalPages;
               setIsEndPageModalVisible(false);
               AsyncStorage.removeItem('timerPendingState').catch(() => {});
-              if (onUpdateReading && selectedBook) {
-                onUpdateReading(selectedBook, 'updatePage', {
+              if (onUpdateReading && book) {
+                onUpdateReading(book, isCompleted ? 'complete' : 'updatePage', {
                   currentPage: endPage,
-                  totalPages: selectedBookTotalPages,
+                  totalPages,
+                  isCompleted,
                 });
               }
-              if (onSaveReadingRecord && selectedBook) {
+              if (onSaveReadingRecord && book) {
                 const ok = await onSaveReadingRecord({
                   date: new Date().toISOString().split('T')[0],
-                  isbn: selectedBook.isbn,
-                  title: selectedBook.title,
-                  author: selectedBook.author,
-                  cover: selectedBook.coverImage,
+                  isbn: book.isbn,
+                  title: book.title,
+                  author: book.author,
+                  cover: book.coverImage,
                   duration: resultElapsed,
                   createdAt: new Date().toISOString(),
                   startPage: readingStartPage,
                   endPage,
-                  totalPages: selectedBookTotalPages,
+                  totalPages,
                   source: 'timer',
                 });
                 if (ok === false) showResultToast('기록 저장에 실패했어요. 나중에 다시 시도해주세요.');
@@ -991,7 +1267,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
             primaryButtonDisabled={
               !endPageInput.trim() ||
               (endPageInput.length > 1 && endPageInput.startsWith('0')) ||
-              (selectedBookTotalPages > 0 && parseInt(endPageInput) > selectedBookTotalPages) ||
+              (timerBookTotalPages > 0 && parseInt(endPageInput) > timerBookTotalPages) ||
               parseInt(endPageInput) <= readingStartPage
             }
           >
@@ -1001,8 +1277,8 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
               helpText={
                 endPageInput.length > 1 && endPageInput.startsWith('0')
                   ? '올바른 페이지 번호를 입력해주세요.'
-                  : selectedBookTotalPages > 0 && parseInt(endPageInput) > selectedBookTotalPages
-                  ? `책의 마지막 페이지(${selectedBookTotalPages}p)를 넘었어요.`
+                  : timerBookTotalPages > 0 && parseInt(endPageInput) > timerBookTotalPages
+                  ? `책의 마지막 페이지(${timerBookTotalPages}p)를 넘었어요.`
                   : endPageInput.trim() && parseInt(endPageInput) <= readingStartPage
                   ? `읽기 시작한 페이지(${readingStartPage}p)보다 커야 합니다.`
                   : '읽기 시작한 페이지보다 큰 값을 입력해주세요.'
@@ -1238,6 +1514,17 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
           </View>
         </View>
       </Modal>
+
+      <ModalPopup
+        visible={isConflictModalVisible}
+        title="이미 책 기록중입니다."
+        description="새로운 책을 기록할까요? 읽고있는 책의 기록은 자동 저장됩니다."
+        primaryButtonText="새로 기록"
+        secondaryButtonText="취소"
+        onPrimaryPress={handleConflictNewRecord}
+        onSecondaryPress={() => setIsConflictModalVisible(false)}
+        onClose={() => setIsConflictModalVisible(false)}
+      />
     </View>
   );
 }
@@ -1451,5 +1738,129 @@ const styles = StyleSheet.create({
   cardMenuOptionText: {
     ...Typography.body1Medium,
     color: Colors.gray900,
+  },
+  timerTopSection: {
+    position: 'relative',
+    borderBottomLeftRadius: BorderRadius.xxl,
+    borderBottomRightRadius: BorderRadius.xxl,
+    paddingTop: Spacing.huge,
+    paddingBottom: Spacing.xxxl,
+    overflow: 'hidden',
+  },
+  timerTopBg: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  timerTopOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+  },
+  timerTopContent: {
+    alignItems: 'center',
+    gap: Spacing.lg,
+  },
+  timerTopBookData: {
+    alignItems: 'center',
+    paddingHorizontal: Spacing.md,
+  },
+  timerTopTitle: {
+    ...Typography.headline2Bold,
+    color: Colors.gray900,
+    textAlign: 'center',
+  },
+  timerTopSubtitle: {
+    ...Typography.subtitle1Regular,
+    color: Colors.gray900,
+    textAlign: 'center',
+    marginTop: 2,
+  },
+  timerTopAuthor: {
+    ...Typography.body1Regular,
+    color: Colors.gray700,
+    textAlign: 'center',
+    marginTop: Spacing.sm,
+  },
+  timerSheetOverlay: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    justifyContent: 'flex-end',
+    paddingHorizontal: Spacing.md,
+  },
+  timerSheetShadow: {
+    borderRadius: BorderRadius.xxl,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 8,
+    marginBottom: -4,
+  },
+  timerSheetContainer: {
+    backgroundColor: Colors.white,
+    borderRadius: BorderRadius.xxl,
+    paddingBottom: Spacing.xxl,
+    overflow: 'hidden',
+  },
+  timerSheetHandleWrap: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    paddingTop: Spacing.md,
+  },
+  timerSheetHandleBar: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.gray200,
+  },
+  timerSheetBody: {
+    alignItems: 'center',
+    paddingHorizontal: Spacing.xl,
+  },
+  timerSheetDeleteBtn: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+  },
+  timerSheetTime: {
+    fontFamily: 'Min Sans',
+    fontSize: 40,
+    fontWeight: '800',
+    color: Colors.gray900,
+    letterSpacing: -1,
+    textAlign: 'center',
+    marginTop: Spacing.xl,
+  },
+  timerSheetBubbleWrap: {
+    alignItems: 'flex-end',
+    marginBottom: Spacing.sm,
+    marginTop: Spacing.xxl,
+    alignSelf: 'stretch',
+  },
+  timerSheetBubble: {
+    backgroundColor: Colors.primary900,
+    borderRadius: BorderRadius.sm,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+  },
+  timerSheetBubbleText: {
+    ...Typography.body3Regular,
+    color: Colors.white,
+  },
+  timerSheetCompleteBtn: {
+    alignSelf: 'center',
+    marginBottom: Spacing.md,
+  },
+  timerSheetStopBtn: {
+    width: '100%',
   },
 });

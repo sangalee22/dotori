@@ -99,6 +99,7 @@ export default function App() {
   const [feedTab, setFeedTab] = React.useState('all'); // 'all' | 'mine'
   const logoHeightAnim = React.useRef(new Animated.Value(60)).current;
   const nowReadingScrollX = React.useRef(new Animated.Value(0)).current;
+  const bestScrollX = React.useRef(new Animated.Value(0)).current;
   const [homeStartReadingBook, setHomeStartReadingBook] = React.useState(null);
   const [homeStartPageInput, setHomeStartPageInput] = React.useState('');
   const [homeStartPageError, setHomeStartPageError] = React.useState('');
@@ -124,12 +125,11 @@ export default function App() {
     }).catch(() => {});
   }, [isLoggedIn, showSplash]);
 
-  // 피드 탭을 벗어나면 로고 복원
+  // 탭 전환 시 로고 복원
   React.useEffect(() => {
-    if (activeBottomTab !== 'dotoriRoom') {
-      logoVisible.current = true;
-      Animated.timing(logoHeightAnim, { toValue: 60, duration: 200, useNativeDriver: false }).start();
-    }
+    logoVisible.current = true;
+    lastScrollY.current = 0;
+    Animated.timing(logoHeightAnim, { toValue: 60, duration: 200, useNativeDriver: false }).start();
   }, [activeBottomTab]);
 
   const handleOpenProfileEdit = () => {
@@ -990,6 +990,7 @@ export default function App() {
     setCarouselReady(false);
     const idx = loopOffset;
     const t = setTimeout(() => {
+      bestScrollX.setValue(idx * carouselSnap);
       bookListScrollRef.current?.scrollTo({ x: idx * carouselSnap, animated: false });
       setActiveBestIndex(idx);
       setCarouselReady(true);
@@ -1011,6 +1012,7 @@ export default function App() {
           const resetIdx = len + (next % len);
           setTimeout(() => {
             bookListScrollRef.current?.scrollTo({ x: resetIdx * carouselSnap, animated: false });
+            bestScrollX.setValue(resetIdx * carouselSnap);
           }, 350);
           return resetIdx;
         }
@@ -1350,6 +1352,8 @@ export default function App() {
               style={styles.scrollView}
               contentContainerStyle={styles.scrollContent}
               showsVerticalScrollIndicator={false}
+              scrollEventThrottle={16}
+              onScroll={handleFeedScroll}
             >
               {/* Now Reading Section */}
             <View style={styles.section}>
@@ -1532,7 +1536,7 @@ export default function App() {
               <Text style={styles.errorText}>{booksError}</Text>
             </View>
           ) : (
-            <ScrollView
+            <Animated.ScrollView
               key={currentBooks.length}
               ref={bookListScrollRef}
               horizontal
@@ -1543,10 +1547,10 @@ export default function App() {
               style={{ height: 310, opacity: carouselReady ? 1 : 0 }}
               contentContainerStyle={{ paddingHorizontal: carouselSidePadding, alignItems: 'flex-start' }}
               scrollEventThrottle={16}
-              onScroll={(e) => {
-                const index = Math.round(e.nativeEvent.contentOffset.x / carouselSnap);
-                if (index !== activeBestIndex) setActiveBestIndex(index);
-              }}
+              onScroll={Animated.event(
+                [{ nativeEvent: { contentOffset: { x: bestScrollX } } }],
+                { useNativeDriver: true }
+              )}
               onScrollBeginDrag={() => clearInterval(bestAutoSlideRef.current)}
               onMomentumScrollEnd={(e) => {
                 const len = currentBooks.length;
@@ -1555,9 +1559,11 @@ export default function App() {
                 if (index < len) {
                   index = index + len;
                   bookListScrollRef.current?.scrollTo({ x: index * carouselSnap, animated: false });
+                  bestScrollX.setValue(index * carouselSnap);
                 } else if (index >= len * 2) {
                   index = len + (index % len);
                   bookListScrollRef.current?.scrollTo({ x: index * carouselSnap, animated: false });
+                  bestScrollX.setValue(index * carouselSnap);
                 }
                 setActiveBestIndex(index);
                 // 자동 슬라이드 재시작
@@ -1570,6 +1576,7 @@ export default function App() {
                       const resetIdx = len + (next % len);
                       setTimeout(() => {
                         bookListScrollRef.current?.scrollTo({ x: resetIdx * carouselSnap, animated: false });
+                        bestScrollX.setValue(resetIdx * carouselSnap);
                       }, 350);
                       return resetIdx;
                     }
@@ -1588,7 +1595,8 @@ export default function App() {
                   coverImage={book.coverImage}
                   isbn={book.isbn}
                   cardWidth={carouselCardWidth}
-                  isActive={index % currentBooks.length === activeBestIndex % currentBooks.length}
+                  scrollX={bestScrollX}
+                  index={index}
                   onPress={() => {
                     const bookData = {
                       isbn: book.isbn,
@@ -1601,10 +1609,9 @@ export default function App() {
                     setPreviousView(currentView);
                     setCurrentView('bookDetail');
                   }}
-                  style={null}
                 />
               ))}
-            </ScrollView>
+            </Animated.ScrollView>
           )}
         </View>
 
@@ -1816,7 +1823,7 @@ export default function App() {
           <SafeAreaView style={styles.headerSafeArea} edges={['top']}>
             <MainHeader
               onSearch={() => setCurrentView('search')}
-              logoHeightAnim={activeBottomTab === 'dotoriRoom' ? logoHeightAnim : undefined}
+              logoHeightAnim={logoHeightAnim}
               rightButton={__DEV__ && activeBottomTab === 'dotoriRoom' ? (
                 <TouchableOpacity onPress={() => setCurrentView('createRoom')} style={{ paddingHorizontal: 12, paddingVertical: 8 }}>
                   <Text style={{ fontSize: 22, color: Colors.primary500 }}>＋</Text>

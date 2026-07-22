@@ -13,9 +13,36 @@ export default function BookTopSection({
   author,
   coverImage,
   paddingTop = 108,
+  coverWidth = 600,
+  coverHeight = 246,
   isLoading = false,
   style,
 }) {
+  // coverHeight가 기본값(246)이 아닐 때만 자동 비율 모드
+  const autoSize = coverHeight !== 246;
+
+  const [displaySize, setDisplaySize] = React.useState({
+    width: autoSize ? Math.round(coverHeight * 0.7) : coverWidth,
+    height: coverHeight,
+  });
+
+  React.useEffect(() => {
+    setDisplaySize({
+      width: autoSize ? Math.round(coverHeight * 0.7) : coverWidth,
+      height: coverHeight,
+    });
+  }, [coverImage, coverWidth, coverHeight]);
+
+  const handleCoverLoad = ({ nativeEvent }) => {
+    if (!autoSize) return;
+    const { width: w, height: h } = nativeEvent.source;
+    if (!w || !h) return;
+    setDisplaySize({
+      width: Math.round(w * (coverHeight / h)),
+      height: coverHeight,
+    });
+  };
+
   return (
     <View style={[styles.topSection, { paddingTop }, style]}>
       {/* Background Image with Blur */}
@@ -36,17 +63,18 @@ export default function BookTopSection({
       {/* Book Info */}
       <View style={styles.bookInfoContainer}>
         {/* Book Cover */}
-        <View style={styles.bookCover}>
+        <View style={{ width: displaySize.width, height: displaySize.height, alignSelf: 'center', borderRadius: BorderRadius.sm, overflow: 'hidden' }}>
           {isLoading ? (
-            <Skeleton width={164} height={246} borderRadius={8} />
+            <Skeleton width={164} height={displaySize.height} borderRadius={BorderRadius.sm} />
           ) : coverImage ? (
             <Image
               source={typeof coverImage === 'string' ? { uri: coverImage } : coverImage}
-              style={styles.coverImage}
+              style={{ width: displaySize.width, height: displaySize.height }}
               resizeMode="contain"
+              onLoad={handleCoverLoad}
             />
           ) : (
-            <View style={styles.coverPlaceholder} />
+            <View style={{ width: displaySize.width, height: displaySize.height, backgroundColor: Colors.gray50 }} />
           )}
         </View>
 
@@ -105,27 +133,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.4)',
   },
   bookInfoContainer: {
-    flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
     gap: Spacing.lg,
-  },
-  bookCover: {
-    height: 246,
-    width: 600,
-    alignSelf: 'center',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  coverImage: {
-    height: 246,
-    width: 600,
-    borderRadius: BorderRadius.sm,
-  },
-  coverPlaceholder: {
-    width: 'auto',
-    height: 246,
-    backgroundColor: Colors.gray50,
   },
   bookData: {
     alignItems: 'center',

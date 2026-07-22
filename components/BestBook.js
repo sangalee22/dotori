@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, Image, StyleSheet, TouchableOpacity, Animated } from 'react-native';
 import { Colors, Typography, BorderRadius, Spacing } from '../styles';
 
 export default function BestBook({
@@ -10,14 +10,65 @@ export default function BestBook({
   onPress,
   style,
   cardWidth,
-  isActive = false,
+  scrollX,
+  index,
   // legacy props (recent books section)
+  isActive = false,
   flexibleWidth = false,
 }) {
   const cleanTitle = (title || '').split(' - ')[0].trim();
   const showRank = rank != null && rank <= 10;
 
-  // 캐러셀 모드 (cardWidth 지정 시)
+  // 캐러셀 모드 (scrollX 기반 애니메이션)
+  if (cardWidth && scrollX != null && index != null) {
+    const snap = cardWidth;
+    const inputRange = [(index - 1) * snap, index * snap, (index + 1) * snap];
+
+    const coverScale = scrollX.interpolate({
+      inputRange,
+      outputRange: [0.752, 1.0, 0.752],
+      extrapolate: 'clamp',
+    });
+
+    const cardOpacity = scrollX.interpolate({
+      inputRange,
+      outputRange: [0.5, 1.0, 0.5],
+      extrapolate: 'clamp',
+    });
+
+    const rankOpacity = scrollX.interpolate({
+      inputRange: [(index - 0.4) * snap, index * snap, (index + 0.4) * snap],
+      outputRange: [0, 1, 0],
+      extrapolate: 'clamp',
+    });
+
+    const rankColor =
+      rank === 1 ? Colors.primary900 :
+      rank === 2 ? Colors.primary800 :
+      rank === 3 ? Colors.primary500 :
+      Colors.gray700;
+
+    return (
+      <TouchableOpacity onPress={onPress} activeOpacity={0.85} style={[styles.carouselOuter, style]}>
+        <Animated.View style={[styles.carouselInner, { opacity: cardOpacity, transform: [{ scale: coverScale }] }]}>
+          {showRank && (
+            <Animated.View style={{ opacity: rankOpacity, zIndex: 2, width: 141 }}>
+              <Text style={[styles.activeRank, { color: rankColor }]}>{rank}</Text>
+            </Animated.View>
+          )}
+          <View style={[styles.activeCover, showRank && { marginTop: -24 }]}>
+            {coverImage
+              ? <Image source={{ uri: coverImage }} style={styles.coverImage} />
+              : <View style={styles.coverPlaceholder} />}
+          </View>
+          <Text style={styles.activeTitle} numberOfLines={2} lineBreakStrategyIOS="hangul-word">{cleanTitle}</Text>
+          <Text style={styles.activeAuthor} numberOfLines={1}>{author}</Text>
+        </Animated.View>
+      </TouchableOpacity>
+    );
+  }
+
+  // 레거시 캐러셀 모드 (isActive prop 기반, fallback)
   if (cardWidth) {
     const rankColor =
       rank === 1 ? Colors.primary900 :
@@ -26,7 +77,6 @@ export default function BestBook({
       Colors.gray700;
 
     if (isActive) {
-      // 가운데: cover 141×206, 전체 141×310, rank 위에서 겹침
       return (
         <TouchableOpacity onPress={onPress} activeOpacity={0.85} style={[styles.activeContainer, style]}>
           {showRank && (
@@ -43,7 +93,6 @@ export default function BestBook({
       );
     }
 
-    // 양옆: cover 106×155, rank 없음
     return (
       <TouchableOpacity onPress={onPress} activeOpacity={0.85} style={[styles.inactiveContainer, style]}>
         <View style={styles.inactiveCover}>
@@ -116,6 +165,18 @@ export default function BestBook({
 }
 
 const styles = StyleSheet.create({
+  // ── 캐러셀: Animated 모드 ─────────────────
+  carouselOuter: {
+    width: 141,
+    height: 310,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+  },
+  carouselInner: {
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+  },
+
   // ── 캐러셀: 가운데 (active) ───────────────
   activeContainer: {
     width: 141,
@@ -192,40 +253,6 @@ const styles = StyleSheet.create({
   },
 
   // ── 레거시 ────────────────────────────────
-  carouselRank: {
-    fontFamily: 'Min Sans',
-    fontWeight: '800',
-    fontSize: 50,
-    lineHeight: 48,
-    alignSelf: 'flex-start',
-    zIndex: 10,
-  },
-  carouselCover: {
-    width: '100%',
-    aspectRatio: 0.68,
-    borderRadius: BorderRadius.sm,
-    borderColor: Colors.gray100,
-    borderWidth: 1,
-    overflow: 'hidden',
-    marginBottom: Spacing.sm,
-  },
-  carouselCoverWithRank: {
-    marginTop: -24,
-  },
-  carouselTitle: {
-    ...Typography.subtitle1Medium,
-    color: Colors.gray900,
-    textAlign: 'center',
-    marginTop: 2,
-  },
-  carouselAuthor: {
-    ...Typography.body2Regular,
-    color: Colors.gray600,
-    textAlign: 'center',
-    marginTop: 2,
-  },
-
-  // ── 레거시 모드 ───────────────────────────
   container: {
     alignItems: 'flex-start',
   },

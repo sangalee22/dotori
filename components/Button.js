@@ -29,6 +29,7 @@ export default function Button({
   onPress,
   children,
   icon,
+  leftIcon,
   disabled = false,
   loading = false,
   style,
@@ -100,8 +101,13 @@ export default function Button({
         loading ? (
           <ActivityIndicator size="small" color={indicatorColor} />
         ) : typeof children === 'string' ? (
-          icon ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: ICON_GAP[size] }}>
+          (icon || leftIcon) ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.xs }}>
+              {leftIcon && React.cloneElement(leftIcon, {
+                width: 24,
+                height: 24,
+                color: isDisabled ? Colors.gray400 : ICON_COLOR[variant],
+              })}
               <Text
                 style={[
                   styles.text,
@@ -114,7 +120,7 @@ export default function Button({
               >
                 {children}
               </Text>
-              {React.cloneElement(icon, {
+              {icon && React.cloneElement(icon, {
                 width: ICON_SIZE[size],
                 height: ICON_SIZE[size],
                 color: isDisabled ? Colors.gray400 : ICON_COLOR[variant],
