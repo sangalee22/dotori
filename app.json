@@ -2,7 +2,7 @@
   "expo": {
     "name": "도토리",
     "slug": "dotori",
-    "version": "1.1.1",
+    "version": "1.2.0",
     "scheme": [
       "com.sanga.dotori",
       "kakao1b885f7c3d187e32d08f2db2c8a124b7",

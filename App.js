@@ -105,6 +105,7 @@ export default function App() {
   const [homeStartPageError, setHomeStartPageError] = React.useState('');
   const lastScrollY = React.useRef(0);
   const startTimerRef = React.useRef(null);
+  const checkTimerConflictRef = React.useRef(null);
   const logoVisible = React.useRef(true);
 
   // 스플래시 종료 + 로그인 상태일 때 광고 팝업 (하루 1회)
@@ -768,6 +769,7 @@ export default function App() {
   };
 
   const handleOpenHomeStartReading = (book) => {
+    if (checkTimerConflictRef.current?.(book)) return;
     setHomeStartReadingBook(book);
     setHomeStartPageInput(String(book.currentPage || ''));
     setHomeStartPageError('');
@@ -1871,6 +1873,7 @@ export default function App() {
             onSaveReadingRecord={handleSaveReadingRecord}
             onReady={(openModal) => { openReadingModalRef.current = openModal; }}
             startTimerRef={startTimerRef}
+            checkTimerConflictRef={checkTimerConflictRef}
           />
         </SafeAreaView>
       </View>

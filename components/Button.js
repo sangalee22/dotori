@@ -1,5 +1,6 @@
 import React from 'react';
-import { Pressable, Text, View, StyleSheet, ActivityIndicator } from 'react-native';
+import { Pressable, Text, View, StyleSheet } from 'react-native';
+import LottieView from 'lottie-react-native';
 import { Colors, Typography, Spacing, BorderRadius } from '../styles';
 
 const ICON_SIZE = { small: 20, medium: 20, large: 20, xlarge: 20, xxlarge: 20 };
@@ -81,7 +82,6 @@ export default function Button({
   };
 
   const isDisabled = disabled || loading;
-  const indicatorColor = variant === 'primary' ? Colors.white : Colors.gray400;
 
   return (
     <Pressable
@@ -99,7 +99,12 @@ export default function Button({
     >
       {({ pressed }) =>
         loading ? (
-          <ActivityIndicator size="small" color={indicatorColor} />
+          <LottieView
+            source={require('../assets/loading.json')}
+            autoPlay
+            loop
+            style={{ width: 24, height: 24 }}
+          />
         ) : typeof children === 'string' ? (
           (icon || leftIcon) ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.xs }}>

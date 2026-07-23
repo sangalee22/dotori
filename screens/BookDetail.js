@@ -1503,6 +1503,7 @@ export default function BookDetail({
                     onPress={handleSubmitReview}
                     style={styles.button}
                     disabled={reviewContent.trim().length === 0 && selectedImages.length === 0}
+                    loading={isSubmitting}
                   >
                     {isEditMode ? '수정' : '게시'}
                   </Button>
