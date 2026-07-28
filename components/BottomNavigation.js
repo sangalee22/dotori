@@ -352,6 +352,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
   const [isTimerSheetVisible, setIsTimerSheetVisible] = React.useState(false);
   const timerSheetHeightRef = React.useRef(800);
   const timerSheetTranslateY = React.useRef(new Animated.Value(800)).current;
+  const isTimerSheetClosingRef = React.useRef(false);
   const timerSheetPanResponder = React.useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, g) => g.dy > 5,
@@ -601,19 +602,17 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
 
   const handleWriteReview = async () => {
     try {
+      const book = isManualResultRef.current ? manualResultBook : timerBook;
+      const endPage = parseInt(endPageInput) || 0;
       let imageUri = null;
       if (Platform.OS !== 'web') {
         try {
           imageUri = await captureCard(cardCaptureRef);
         } catch (e) { }
       }
-      logEvent('write_review_tap', { isbn: (isManualResultRef.current ? manualResultBook : timerBook)?.isbn });
-      setIsResultModalVisible(false);
-      onWriteReview?.({
-        book: isManualResultRef.current ? manualResultBook : timerBook,
-        endPage: parseInt(endPageInput) || 0,
-        imageUri,
-      });
+      logEvent('write_review_tap', { isbn: book?.isbn });
+      closeResultModal();
+      onWriteReview?.({ book, endPage, imageUri });
     } catch (e) {
       showResultToast('오류가 발생했어요.');
     }
@@ -626,20 +625,29 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
   });
 
   const openTimerSheet = () => {
+    isTimerSheetClosingRef.current = false;
     timerSheetTranslateY.setValue(timerSheetHeightRef.current);
     setIsTimerSheetVisible(true);
     Animated.spring(timerSheetTranslateY, { toValue: 0, useNativeDriver: true, tension: 120, friction: 22 }).start();
   };
 
   const closeTimerSheet = () => {
+    if (isTimerSheetClosingRef.current) return;
+    isTimerSheetClosingRef.current = true;
     Animated.timing(timerSheetTranslateY, { toValue: timerSheetHeightRef.current, duration: 280, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(() => {
       setIsTimerSheetVisible(false);
+      isTimerSheetClosingRef.current = false;
     });
   };
 
   const closeResultModal = React.useCallback(() => {
     setIsResultModalVisible(false);
     setCustomCardBg(null);
+    // 타이머 상태 방어적 리셋 — [isPlaying] effect 타이밍과 무관하게 항상 0으로 보장
+    setIsPlaying(false);
+    setElapsed(0);
+    elapsedBaseRef.current = 0;
+    sessionStartTsRef.current = null;
     if (isManualResultRef.current) {
       setManualResultBook(null);
       setManualResultTotalPages(0);
