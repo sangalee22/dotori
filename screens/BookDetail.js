@@ -25,6 +25,7 @@ import HelpIcon from '../components/HelpIcon';
 import ImageIcon from '../components/ImageIcon';
 import DeleteIcon from '../components/DeleteIcon';
 import Toast from '../components/Toast';
+import ModalPopup from '../components/ModalPopup';
 import IconButton from '../components/IconButton';
 import Switch from '../components/Switch';
 import ChevronDownIcon from '../components/ChevronDownIcon';
@@ -84,6 +85,10 @@ export default function BookDetail({
   targetReviewId = null,
   initialReadingState = null,
   editReviewData = null,
+  onBookDataLoaded,
+  isTimerActive = false,
+  discardTimerRef,
+  completeTimerRef,
   style,
 }) {
   const insets = useSafeAreaInsets();
@@ -183,6 +188,7 @@ export default function BookDetail({
   const [bookData, setBookData] = React.useState(null);
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState(null);
+  const [timerCompleteModalVisible, setTimerCompleteModalVisible] = React.useState(false);
 
   // Reading state - initialize from initialReadingState if provided
   const [isReading, setIsReading] = React.useState(initialReadingState?.isReading || false);
@@ -391,6 +397,7 @@ export default function BookDetail({
 
         const data = await fetchBookDetail(targetIsbn);
         setBookData(data);
+        if (data?.categoryName) onBookDataLoaded?.(isbn, data.categoryName);
       } catch (err) {
         setError('책 정보를 불러오는데 실패했습니다.');
       } finally {
@@ -540,6 +547,7 @@ export default function BookDetail({
         currentPage: newPage,
         totalPages,
         isCompleted: isBookCompleted,
+        categoryName: bookData?.categoryName,
       });
     }
 
@@ -548,6 +556,15 @@ export default function BookDetail({
   };
 
   const handleCompleteBook = () => {
+    if (isTimerActive) {
+      handleClosePageEdit();
+      setTimeout(() => setTimerCompleteModalVisible(true), 350);
+      return;
+    }
+    doCompleteBook();
+  };
+
+  const doCompleteBook = () => {
     const totalPages = bookData?.subInfo?.itemPage || 1000;
     setCurrentPage(totalPages);
     setReadingProgress(100);
@@ -558,6 +575,7 @@ export default function BookDetail({
         currentPage: totalPages,
         totalPages,
         isCompleted: true,
+        categoryName: bookData?.categoryName,
       });
     }
 
@@ -1630,6 +1648,19 @@ export default function BookDetail({
           <View style={{ height: 0 }} />
         </InputAccessoryView>
       )}
+
+      <ModalPopup
+        visible={timerCompleteModalVisible}
+        title="책을 기록중입니다."
+        description="기록을 저장하고 완독을 할까요?"
+        primaryButtonText="완독"
+        secondaryButtonText="취소"
+        onPrimaryPress={() => {
+          setTimerCompleteModalVisible(false);
+          completeTimerRef?.current?.();
+        }}
+        onClose={() => setTimerCompleteModalVisible(false)}
+      />
     </Animated.View>
   );
 }

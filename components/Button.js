@@ -12,6 +12,7 @@ const ICON_COLOR = {
   text:    Colors.primary500,
   outline: Colors.gray900,
   sub:     Colors.gray900,
+  subline: Colors.gray900,
 };
 
 /**
@@ -51,6 +52,7 @@ export default function Button({
     text: styles.variantText,
     outline: styles.variantOutline,
     sub: styles.variantSub,
+    subline: styles.variantSubline,
   };
 
   const pressedStyles = {
@@ -59,6 +61,7 @@ export default function Button({
     text: styles.pressedText,
     outline: styles.pressedOutline,
     sub: styles.pressedSub,
+    subline: styles.pressedSubline,
   };
 
   const textSizeStyles = {
@@ -75,6 +78,7 @@ export default function Button({
     text: styles.textOnly,
     outline: styles.textOutline,
     sub: styles.textSub,
+    subline: styles.textSubline,
   };
 
   const textPressedStyles = {
@@ -208,6 +212,11 @@ const styles = StyleSheet.create({
   variantSub: {
     backgroundColor: Colors.gray100,
   },
+  variantSubline: {
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: Colors.gray300,
+  },
 
   // Disabled state
   disabled: {
@@ -223,6 +232,9 @@ const styles = StyleSheet.create({
   },
   pressedSub: {
     backgroundColor: Colors.gray200,
+  },
+  pressedSubline: {
+    backgroundColor: Colors.gray50,
   },
   pressedOutline: {
     backgroundColor: Colors.gray50,
@@ -284,6 +296,9 @@ const styles = StyleSheet.create({
     color: Colors.gray900,
   },
   textSub: {
+    color: Colors.gray900,
+  },
+  textSubline: {
     color: Colors.gray900,
   },
   textDisabled: {

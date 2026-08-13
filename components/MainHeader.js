@@ -52,7 +52,6 @@ export default function MainHeader({ onSearch, tabs, activeTab, onTabChange, log
 
 const styles = StyleSheet.create({
   wrapper: {
-    backgroundColor: Colors.white,
   },
   header: {
     flexDirection: 'row',

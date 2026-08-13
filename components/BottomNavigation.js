@@ -255,7 +255,7 @@ function MyIcon({ active }) {
  * @param {function} onTabPress - Callback when tab is pressed, receives tab name
  * @param {object} style - Additional style overrides
  */
-export default function BottomNavigation({ activeTab = 'home', onTabPress, currentBooks = [], readingRecords = [], onUpdateReading, onWriteReview, onSaveReadingRecord, onReady, startTimerRef, checkTimerConflictRef, style }) {
+export default function BottomNavigation({ activeTab = 'home', onTabPress, currentBooks = [], readingRecords = [], onUpdateReading, onWriteReview, onSaveReadingRecord, onReady, startTimerRef, checkTimerConflictRef, openTimerSheetRef, onActiveTimerChange, discardTimerRef, completeTimerRef, style }) {
   const insets = useSafeAreaInsets();
   const { showToast } = useToast();
   const cardCaptureRef = React.useRef(null);
@@ -350,12 +350,20 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
     return elapsedBaseRef.current;
   }, []);
   const [isTimerSheetVisible, setIsTimerSheetVisible] = React.useState(false);
+  const [timerToast, setTimerToast] = React.useState({ visible: false, message: '', requestId: 0 });
+  const timerToastTimerRef = React.useRef(null);
+  const showTimerToast = React.useCallback((message) => {
+    clearTimeout(timerToastTimerRef.current);
+    setTimerToast(prev => ({ visible: true, message, requestId: prev.requestId + 1 }));
+    timerToastTimerRef.current = setTimeout(() => setTimerToast(prev => ({ ...prev, visible: false })), 2300);
+  }, []);
   const timerSheetHeightRef = React.useRef(800);
   const timerSheetTranslateY = React.useRef(new Animated.Value(800)).current;
   const isTimerSheetClosingRef = React.useRef(false);
+  const timerConfirmTypeRef = React.useRef(null);
   const timerSheetPanResponder = React.useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_, g) => g.dy > 5,
+      onMoveShouldSetPanResponder: (_, g) => !timerConfirmTypeRef.current && g.dy > 5,
       onPanResponderMove: (_, g) => { if (g.dy > 0) timerSheetTranslateY.setValue(g.dy); },
       onPanResponderRelease: (_, g) => {
         if (g.dy > 100) {
@@ -367,6 +375,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
     })
   ).current;
   const [timerConfirmType, setTimerConfirmType] = React.useState(null); // 'stop' | 'delete' | 'complete' | null
+  React.useEffect(() => { timerConfirmTypeRef.current = timerConfirmType; }, [timerConfirmType]);
   const [isConflictModalVisible, setIsConflictModalVisible] = React.useState(false);
   const [isConflictPageModalVisible, setIsConflictPageModalVisible] = React.useState(false);
   const [conflictNewBook, setConflictNewBook] = React.useState(null);
@@ -404,12 +413,43 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
   const isManualResultRef = React.useRef(false);
   const isTimerCompleteRef = React.useRef(false);
   const [timerBook, setTimerBook] = React.useState(null);
+  React.useEffect(() => { onActiveTimerChange?.(timerBook?.isbn ?? null); }, [timerBook]);
   const [timerBookTotalPages, setTimerBookTotalPages] = React.useState(0);
   const [manualResultBook, setManualResultBook] = React.useState(null);
   const [manualResultTotalPages, setManualResultTotalPages] = React.useState(0);
   const isBookSelectingRef = React.useRef(false);
   const isSavingRef = React.useRef(false);
   const isPlayPressRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (openTimerSheetRef) {
+      openTimerSheetRef.current = () => { if (!isTimerSheetVisible) openTimerSheet(); };
+    }
+  }, [isTimerSheetVisible]);
+
+  React.useEffect(() => {
+    if (discardTimerRef) {
+      discardTimerRef.current = () => {
+        isTimerCompleteRef.current = false;
+        timerConfirmTypeRef.current = null;
+        setTimerConfirmType(null);
+        setIsTimerSheetVisible(false);
+        setTimerBook(null);
+        setTimerBookTotalPages(0);
+        setIsPlaying(false);
+        setElapsed(0);
+        elapsedBaseRef.current = 0;
+        sessionStartTsRef.current = null;
+        AsyncStorage.removeItem('timerState').catch(() => {});
+        AsyncStorage.removeItem('timerPendingState').catch(() => {});
+        setIsModalOpen(false);
+        setPageInput('');
+      };
+    }
+    if (completeTimerRef) {
+      completeTimerRef.current = () => handleTimerCompleteRef.current();
+    }
+  }, []);
 
   React.useEffect(() => {
     if (startTimerRef) {
@@ -633,6 +673,8 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
 
   const closeTimerSheet = () => {
     if (isTimerSheetClosingRef.current) return;
+    timerConfirmTypeRef.current = null;
+    setTimerConfirmType(null);
     isTimerSheetClosingRef.current = true;
     Animated.timing(timerSheetTranslateY, { toValue: timerSheetHeightRef.current, duration: 280, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(() => {
       setIsTimerSheetVisible(false);
@@ -678,6 +720,8 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
     isTimerCompleteRef.current = true;
     handleTimerSheetStop();
   };
+  const handleTimerCompleteRef = React.useRef(handleTimerComplete);
+  handleTimerCompleteRef.current = handleTimerComplete;
 
   const handleTimerPause = () => {
     setIsPlaying(false);
@@ -784,7 +828,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
       setTimeout(() => {
         setIsPlaying(true);
         openTimerSheet();
-        showToast('독서 기록을 시작했어요.');
+        setTimeout(() => showTimerToast('독서 기록을 시작했어요.'), 400);
       }, 300);
     }, 100);
   };
@@ -803,7 +847,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
     setTimeout(() => {
       setIsPlaying(true);
       openTimerSheet();
-      showToast('독서 기록을 시작했어요.');
+      setTimeout(() => showTimerToast('독서 기록을 시작했어요.'), 400);
     }, 600);
   };
 
@@ -1142,52 +1186,54 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
               </View>{/* timerSheetBody */}
             </Pressable>
 
-            {/* 인라인 확인 오버레이 — Modal 중첩 없이 시트 내부에서 처리 */}
-            {timerConfirmType !== null && (() => {
-              const configs = {
-                stop: {
-                  title: '기록을 그만할까요?',
-                  buttons: [
-                    { label: '일시정지', variant: 'default', onPress: () => { setTimerConfirmType(null); handleTimerPause(); } },
-                    { label: '중지', variant: 'primary', onPress: () => { setTimerConfirmType(null); handleTimerSheetStop(); } },
-                  ],
-                },
-                delete: {
-                  title: '기록을 삭제할까요?',
-                  description: '기록은 저장되지 않으며 복구하실 수 없습니다.',
-                  buttons: [
-                    { label: '취소', variant: 'default', onPress: () => setTimerConfirmType(null) },
-                    { label: '삭제', variant: 'primary', onPress: () => { setTimerConfirmType(null); handleTimerReset(); } },
-                  ],
-                },
-                complete: {
-                  title: '완독하시겠어요?',
-                  buttons: [
-                    { label: '취소', variant: 'default', onPress: () => setTimerConfirmType(null) },
-                    { label: '완독', variant: 'primary', onPress: () => { setTimerConfirmType(null); handleTimerComplete(); } },
-                  ],
-                },
-              };
-              const config = configs[timerConfirmType];
-              return (
-                <Pressable style={styles.timerConfirmOverlay} onPress={() => setTimerConfirmType(null)}>
-                  <Pressable style={styles.timerConfirmBox} onPress={() => {}}>
-                    <Text style={styles.timerConfirmTitle}>{config.title}</Text>
-                    {config.description && <Text style={styles.timerConfirmDesc}>{config.description}</Text>}
-                    <View style={styles.timerConfirmButtons}>
-                      {config.buttons.map((btn) => (
-                        <Button key={btn.label} variant={btn.variant} size="xlarge" style={{ flex: 1 }} onPress={btn.onPress}>
-                          {btn.label}
-                        </Button>
-                      ))}
-                    </View>
-                  </Pressable>
-                </Pressable>
-              );
-            })()}
             </View>
           </Animated.View>
         </Pressable>
+
+        {timerConfirmType !== null && (() => {
+          const configs = {
+            stop: {
+              title: '독서를 그만할까요?',
+              description: '정지해도 이어서 읽을 수 있어요.',
+              secondaryText: '일시정지',
+              primaryText: '정지',
+              onSecondary: () => { setTimerConfirmType(null); handleTimerPause(); showTimerToast('기록을 일시 정지할게요.'); },
+              onPrimary: () => { setTimerConfirmType(null); handleTimerSheetStop(); },
+            },
+            delete: {
+              title: '기록을 삭제할까요?',
+              description: '기록은 저장되지 않으며 복구하실 수 없습니다.',
+              secondaryText: '취소',
+              primaryText: '삭제',
+              onSecondary: () => setTimerConfirmType(null),
+              onPrimary: () => { setTimerConfirmType(null); handleTimerReset(); },
+            },
+            complete: {
+              title: '완독하시겠어요?',
+              secondaryText: '취소',
+              primaryText: '완독',
+              onSecondary: () => setTimerConfirmType(null),
+              onPrimary: () => { setTimerConfirmType(null); handleTimerComplete(); },
+            },
+          };
+          const c = configs[timerConfirmType];
+          return (
+            <Pressable style={styles.timerConfirmOverlay} onPress={() => setTimerConfirmType(null)}>
+              <Pressable style={styles.timerConfirmBox} onPress={(e) => e.stopPropagation()}>
+                <View style={styles.timerConfirmBody}>
+                  <Text style={styles.timerConfirmTitle}>{c.title}</Text>
+                  {c.description && <Text style={styles.timerConfirmDesc}>{c.description}</Text>}
+                </View>
+                <View style={styles.timerConfirmButtons}>
+                  <Button variant="sub" size="xlarge" style={{ flex: 1 }} onPress={c.onSecondary}>{c.secondaryText}</Button>
+                  <Button variant="primary" size="xlarge" style={{ flex: 1 }} onPress={c.onPrimary}>{c.primaryText}</Button>
+                </View>
+              </Pressable>
+            </Pressable>
+          );
+        })()}
+
+        <Toast visible={timerToast.visible} message={timerToast.message} requestId={timerToast.requestId} />
       </Modal>
 
       <Modal visible={isResultModalVisible} animationType="slide" onRequestClose={closeResultModal}>
@@ -1635,8 +1681,8 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
 
       <ModalPopup
         visible={isConflictModalVisible}
-        title="이미 책 기록중입니다."
-        description={`새로운 책을 기록할까요?\n읽고있는 책의 기록은 자동 저장됩니다.`}
+        title="이미 독서 기록중입니다."
+        description={`새로운 독서를 기록할까요?\n읽고있는 독서 기록은 자동 저장됩니다.`}
         primaryButtonText="새로 기록"
         secondaryButtonText="취소"
         onPrimaryPress={handleConflictNewRecord}
@@ -2009,18 +2055,22 @@ const styles = StyleSheet.create({
   },
   timerConfirmOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 10,
-    borderRadius: BorderRadius.xxl,
   },
   timerConfirmBox: {
+    width: 300,
     backgroundColor: Colors.white,
     borderRadius: BorderRadius.xl,
-    padding: Spacing.xl,
-    width: '85%',
-    gap: Spacing.lg,
+    paddingTop: Spacing.xxxl,
+    paddingBottom: Spacing.lg,
+    paddingHorizontal: Spacing.lg,
+  },
+  timerConfirmBody: {
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginBottom: Spacing.xl,
   },
   timerConfirmTitle: {
     ...Typography.subtitle1Medium,
@@ -2028,10 +2078,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   timerConfirmDesc: {
-    ...Typography.body2Regular,
-    color: Colors.gray500,
+    ...Typography.body1Regular,
+    color: Colors.gray700,
     textAlign: 'center',
-    marginTop: -Spacing.sm,
   },
   timerConfirmButtons: {
     flexDirection: 'row',

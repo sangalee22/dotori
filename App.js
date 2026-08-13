@@ -34,6 +34,7 @@ import RoomFeed from './screens/RoomFeed';
 import MyScreen from './screens/MyScreen';
 import ModalPopup from './components/ModalPopup';
 import SimbolFillIcon from './components/SimbolFillIcon';
+import GlassBottle from './components/GlassBottle';
 import NowLeadNull from './components/NowLeadNull';
 import GyroBookCover from './components/GyroBookCover';
 import TextField from './components/TextField';
@@ -106,6 +107,10 @@ export default function App() {
   const lastScrollY = React.useRef(0);
   const startTimerRef = React.useRef(null);
   const checkTimerConflictRef = React.useRef(null);
+  const openTimerSheetRef = React.useRef(null);
+  const discardTimerRef = React.useRef(null);
+  const completeTimerRef = React.useRef(null);
+  const [activeTimerIsbn, setActiveTimerIsbn] = React.useState(null);
   const logoVisible = React.useRef(true);
 
   // 스플래시 종료 + 로그인 상태일 때 광고 팝업 (하루 1회)
@@ -188,6 +193,7 @@ export default function App() {
   const [bookDetailTargetReviewId, setBookDetailTargetReviewId] = React.useState(null);
   const bookListScrollRef = React.useRef(null);
   const feedScrollRef = React.useRef(null);
+  const homeScrollRef = React.useRef(null);
   const [feedRefreshTrigger, setFeedRefreshTrigger] = React.useState(0);
   const [activeBestIndex, setActiveBestIndex] = React.useState(0);
   const [carouselReady, setCarouselReady] = React.useState(false);
@@ -718,6 +724,7 @@ export default function App() {
       currentPage: data?.currentPage ?? existingBook?.currentPage ?? 0,
       totalPages: resolvedTotalPages,
       readingDates,
+      categoryName: data?.categoryName || existingBook?.categoryName || book?.categoryName || undefined,
     };
 
     if (isNewBook) updatedBook.startedAt = now;
@@ -757,6 +764,7 @@ export default function App() {
         title: updatedBook.title || book.title || undefined,
         author: updatedBook.author || book.author || undefined,
         coverImage: updatedBook.coverImage || book.coverImage || undefined,
+        categoryName: updatedBook.categoryName || book.categoryName || undefined,
         status,
         currentPage: updatedBook.currentPage ?? 0,
         totalPages: updatedBook.totalPages ?? 0,
@@ -1351,12 +1359,23 @@ export default function App() {
           {/* Render different screens based on active bottom tab */}
           <View style={{ flex: 1, display: activeBottomTab === 'home' ? 'flex' : 'none' }}>
             <ScrollView
-              style={styles.scrollView}
+              ref={homeScrollRef}
+              style={[styles.scrollView, { backgroundColor: Colors.gray50 }]}
               contentContainerStyle={styles.scrollContent}
               showsVerticalScrollIndicator={false}
               scrollEventThrottle={16}
               onScroll={handleFeedScroll}
             >
+              {/* Glass Bottle Widget */}
+              <GlassBottle
+                key={readingBooks.filter(b => b.isCompleted && b.categoryName).map(b => b.isbn).join(',')}
+                completedBooks={readingBooks.filter(b => b.isCompleted)}
+                scrollViewRef={homeScrollRef}
+              />
+
+              {/* White card section */}
+              <View style={styles.homeWhiteCard}>
+
               {/* Now Reading Section */}
             <View style={styles.section}>
               {activeReadingBooks.length > 0 ? (
@@ -1444,15 +1463,26 @@ export default function App() {
                                 <View style={[styles.progressBar, { width: `${progress}%` }]} />
                               </View>
                             </View>
-                            <Button
-                              variant="primary"
-                              size="small"
-                              icon={<PlayIcon />}
-                              onPress={() => handleOpenHomeStartReading(book)}
-                              style={{ alignSelf: 'flex-end', marginTop: Spacing.md }}
-                            >
-                              바로 읽기
-                            </Button>
+                            {String(book.isbn) === String(activeTimerIsbn) ? (
+                              <Button
+                                variant="subline"
+                                size="small"
+                                onPress={() => openTimerSheetRef.current?.()}
+                                style={{ alignSelf: 'flex-end', marginTop: Spacing.md }}
+                              >
+                                기록중...
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="primary"
+                                size="small"
+                                icon={<PlayIcon />}
+                                onPress={() => handleOpenHomeStartReading(book)}
+                                style={{ alignSelf: 'flex-end', marginTop: Spacing.md }}
+                              >
+                                바로 읽기
+                              </Button>
+                            )}
                           </View>
                         </View>
                       </TouchableOpacity>
@@ -1677,6 +1707,8 @@ export default function App() {
               </View>
             </View>
 
+              </View>{/* homeWhiteCard */}
+
         {/* New Books Section - 임시 숨김 */}
           </ScrollView>
           </View>
@@ -1874,6 +1906,10 @@ export default function App() {
             onReady={(openModal) => { openReadingModalRef.current = openModal; }}
             startTimerRef={startTimerRef}
             checkTimerConflictRef={checkTimerConflictRef}
+            openTimerSheetRef={openTimerSheetRef}
+            onActiveTimerChange={setActiveTimerIsbn}
+            discardTimerRef={discardTimerRef}
+            completeTimerRef={completeTimerRef}
           />
         </SafeAreaView>
       </View>
@@ -1921,6 +1957,16 @@ export default function App() {
             onUpdateReading={(updateType, data) => {
               updateReadingBook(selectedBook, updateType, data);
             }}
+            onBookDataLoaded={(isbn, categoryName) => {
+              setReadingBooks(prev => prev.map(b =>
+                String(b.isbn) === String(isbn) && !b.categoryName
+                  ? { ...b, categoryName }
+                  : b
+              ));
+              if (currentUser?.id) {
+                setUserBook(currentUser.id, String(isbn), { categoryName }).catch(() => {});
+              }
+            }}
             initialTab={bookDetailInitialTab}
             openReviewModal={bookDetailOpenReviewModal}
             reviewInitialPage={bookDetailReviewInitialPage}
@@ -1939,6 +1985,9 @@ export default function App() {
               setPreviousView(currentView);
               setCurrentView('createRoom');
             } : undefined}
+            isTimerActive={selectedBook && String(selectedBook.isbn) === String(activeTimerIsbn)}
+            discardTimerRef={discardTimerRef}
+            completeTimerRef={completeTimerRef}
             initialReadingState={readingBookData ? {
               isReading: true,
               isCompleted: readingBookData.isCompleted || false,
@@ -2121,7 +2170,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 10,
-    backgroundColor: Colors.white,
   },
   headerSafeArea: {
     position: 'relative',
@@ -2150,6 +2198,12 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.xl,
     marginBottom: 60,
     marginTop: Spacing.sm,
+  },
+  homeWhiteCard: {
+    backgroundColor: Colors.white,
+    paddingTop: Spacing.huge,
+    borderTopLeftRadius: BorderRadius.huge,
+    borderTopRightRadius: BorderRadius.huge,
   },
   section: {
     marginBottom: 60,

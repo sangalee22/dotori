@@ -1,5 +1,5 @@
 import React from 'react';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Path, Rect } from 'react-native-svg';
 
 export function ShapeStar({ size = 36 }) {
   return (
@@ -24,12 +24,12 @@ export function ShapeMint({ size = 40 }) {
   );
 }
 
-export function ShapeMoon({ size = 44 }) {
+export function ShapeMoon({ size = 44, opacity = 0.5 }) {
   const h = size * (21 / 25);
   return (
     <Svg width={size} height={h} viewBox="0 0 25 21" fill="none">
       <Path
-        opacity="0.5"
+        opacity={opacity}
         d="M0.0171709 12.9563C-0.213008 8.74186 1.88512 4.57308 5.46162 2.10336C9.79571 -0.889494 15.3193 -0.440659 18.9399 1.89523C22.3323 4.08389 24.1534 7.37367 24.6027 10.7192C24.7416 11.7538 23.4552 11.9177 22.8533 11.0648C22.2211 10.1691 21.3518 9.29996 20.0687 8.40624C17.3397 6.50548 13.1104 6.17534 10.2421 7.62719C7.55026 8.98974 5.07097 11.488 4.43471 14.975C4.16676 16.4434 4.17147 17.8293 4.48795 19.1933C4.72815 20.2285 3.6399 21.1867 2.94626 20.3815C1.35672 18.5364 0.187183 16.0691 0.0171709 12.9563Z"
         fill="#0872E4"
       />
@@ -60,6 +60,17 @@ export function ShapeRed({ size = 36 }) {
   );
 }
 
+export function ShapePurple({ size = 22 }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 22 22" fill="none">
+      <Path
+        d="M14 0C15.6569 0 17 1.34315 17 3V5H19C20.6569 5 22 6.34315 22 8V19C22 20.6569 20.6569 22 19 22H8C6.34315 22 5 20.6569 5 19V17H3C1.34315 17 4.02666e-08 15.6569 0 14V3C0 1.34315 1.34315 4.0266e-08 3 0H14Z"
+        fill="#7F59D6"
+      />
+    </Svg>
+  );
+}
+
 export function ShapeYellow({ size = 30 }) {
   const h = size * (22 / 17);
   return (
@@ -68,6 +79,14 @@ export function ShapeYellow({ size = 30 }) {
         d="M0 2C0 0.89543 0.895431 0 2 0H14.0399C15.5203 0 16.4876 1.55259 15.8351 2.8815L12.125 10.4375L15.8659 18.1915C16.5065 19.5195 15.539 21.0605 14.0645 21.0605H2C0.89543 21.0605 0 20.1651 0 19.0605V2Z"
         fill="#F9D269"
       />
+    </Svg>
+  );
+}
+
+export function ShapeEtc({ size = 22 }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 22 22" fill="none">
+      <Rect width="22" height="22" rx="4" fill="#D4D4D9" />
     </Svg>
   );
 }
