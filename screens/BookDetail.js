@@ -31,7 +31,7 @@ import Switch from '../components/Switch';
 import ChevronDownIcon from '../components/ChevronDownIcon';
 import CheckIcon from '../components/CheckIcon';
 import { useToast } from '../contexts/ToastContext';
-import { fetchBookDetail, searchBooks, formatAuthorForDetail } from '../services/aladinApi';
+import { fetchBookDetail, searchBooks, formatAuthorForDetail, decodeHtml } from '../services/aladinApi';
 import { formatTimeAgo } from '../utils/formatTimeAgo';
 import { logEvent } from '../services/analytics';
 import Skeleton from '../components/Skeleton';
@@ -262,6 +262,7 @@ export default function BookDetail({
   const [isStartReadingModalVisible, setIsStartReadingModalVisible] = React.useState(false);
   const [startPageInput, setStartPageInput] = React.useState('');
   const [startPageError, setStartPageError] = React.useState('');
+  const [startReadingCompleteConfirm, setStartReadingCompleteConfirm] = React.useState(false);
   const startReadingModalTranslateY = React.useRef(new Animated.Value(300)).current;
 
   // PanResponder for page edit modal drag
@@ -580,7 +581,6 @@ export default function BookDetail({
     }
 
     handleClosePageEdit();
-    showToast('완독하셨습니다!');
   };
 
   const handleRestartBook = () => {
@@ -887,12 +887,12 @@ export default function BookDetail({
   // title에서 제목과 부제목 분리 (예: "모우어 - 잿빛 미래의 이야기" -> "모우어", "잿빛 미래의 이야기")
   // 제목·저자: props 우선 (Firestore 저장 데이터가 신뢰할 수 있음)
   // 커버·설명·출판사 등 부가정보: API 데이터 사용
-  const fullTitle = bookTitle || bookData?.title || '';
+  const fullTitle = decodeHtml(bookTitle || bookData?.title || '');
   const titleParts = fullTitle.split(' - ');
   const displayTitle = titleParts[0].trim();
   const displaySubtitle = titleParts.length > 1
     ? titleParts.slice(1).join(' - ').trim()
-    : (bookData?.subTitle || bookData?.subtitle || bookSubtitle);
+    : decodeHtml(bookData?.subTitle || bookData?.subtitle || bookSubtitle || '');
   const authorData = formatAuthorForDetail(author || bookData?.author);
   const translatorRoles = ['옮긴이', '번역', '역자', '역'];
   const mainAuthors = authorData.filter(a => !a.role || !translatorRoles.some(r => a.role.includes(r)));
@@ -1296,7 +1296,7 @@ export default function BookDetail({
               </View>
 
               {/* 버튼 영역 */}
-              <View style={styles.modalButtons}>
+              <View style={[styles.modalButtons, { paddingBottom: (keyboardHeight || 310) + Spacing.md }]}>
                 {isCompleted ? (
                   <Button
                     variant="outline"
@@ -1350,7 +1350,9 @@ export default function BookDetail({
           >
             <Pressable onPress={(e) => e.stopPropagation()}>
               <PopupHeader title="독서 시작" />
+              <View style={{ backgroundColor: Colors.white }}>
               <View style={styles.modalBody}>
+
                 <TextField
                   label="몇 페이지부터 읽을까요?"
                   value={startPageInput}
@@ -1368,7 +1370,27 @@ export default function BookDetail({
                   inputAccessoryViewID="hideDoneButton"
                 />
               </View>
-              <View style={styles.modalButtons}>
+              <Button
+                variant="text"
+                size="medium"
+                style={{ alignSelf: 'center', marginBottom: Spacing.md, backgroundColor: Colors.white }}
+                textStyle={{ color: Colors.gray800, textDecorationLine: 'underline' }}
+                onPress={() => {
+                  Animated.timing(startReadingModalTranslateY, {
+                    toValue: 300,
+                    duration: 200,
+                    useNativeDriver: true,
+                  }).start(() => {
+                    setIsStartReadingModalVisible(false);
+                    setStartPageInput('');
+                    setStartPageError('');
+                    setStartReadingCompleteConfirm(true);
+                  });
+                }}
+              >
+                완독했어요 🎉
+              </Button>
+              <View style={[styles.modalButtons, { paddingBottom: (keyboardHeight || 310) + Spacing.md }]}>
                 <Button
                   variant="outline"
                   size="xlarge"
@@ -1386,10 +1408,33 @@ export default function BookDetail({
                   시작하기
                 </Button>
               </View>
+              </View>
             </Pressable>
           </Animated.View>
         </Pressable>
       </Modal>
+
+      <ModalPopup
+        visible={startReadingCompleteConfirm}
+        title="완독하시겠어요?"
+        primaryButtonText="완독"
+        secondaryButtonText="취소"
+        onSecondaryPress={() => setStartReadingCompleteConfirm(false)}
+        onClose={() => setStartReadingCompleteConfirm(false)}
+        onPrimaryPress={() => {
+          setStartReadingCompleteConfirm(false);
+          const totalPages = bookData?.subInfo?.itemPage || 1000;
+          setCurrentPage(totalPages);
+          setReadingProgress(100);
+          setIsCompleted(true);
+          onUpdateReading?.('complete', {
+            currentPage: totalPages,
+            totalPages,
+            isCompleted: true,
+            categoryName: bookData?.categoryName,
+          });
+        }}
+      />
 
       {/* Book Review Modal */}
       <Modal
@@ -1955,8 +2000,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: Spacing.sm,
     paddingHorizontal: Spacing.md,
-    // paddingTop: Spacing.lg,
-    paddingBottom: 310 + Spacing.md,
+    paddingTop: Spacing.md,
     backgroundColor: Colors.white,
   },
   button: {

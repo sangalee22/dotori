@@ -41,6 +41,7 @@ import TextField from './components/TextField';
 import PopupHeader from './components/PopupHeader';
 import AdPopup from './components/AdPopup';
 import ProfileEditScreen from './components/ProfileEditScreen';
+import BookCompleteModal from './components/BookCompleteModal';
 import { registerUser, logout as firebaseLogout, withdrawUser, onAuthChange } from './services/auth';
 import { logScreen, logEvent, logLogin, logSignUp } from './services/analytics';
 import useAppOpenAd from './hooks/useAppOpenAd';
@@ -104,6 +105,8 @@ export default function App() {
   const [homeStartReadingBook, setHomeStartReadingBook] = React.useState(null);
   const [homeStartPageInput, setHomeStartPageInput] = React.useState('');
   const [homeStartPageError, setHomeStartPageError] = React.useState('');
+  const [homeStartCompleteConfirm, setHomeStartCompleteConfirm] = React.useState(false);
+  const [completedBookEvent, setCompletedBookEvent] = React.useState(null);
   const lastScrollY = React.useRef(0);
   const startTimerRef = React.useRef(null);
   const checkTimerConflictRef = React.useRef(null);
@@ -747,6 +750,7 @@ export default function App() {
       updatedBook.isCompleted = true;
       updatedBook.completedAt = now;
       updatedBook.currentPage = updatedBook.totalPages;
+      setCompletedBookEvent(updatedBook);
     }
 
     setReadingBooks(prevBooks => {
@@ -1853,11 +1857,10 @@ export default function App() {
 
           {/* Main Header - 피드/홈 탭에서만 표시 */}
       {(activeBottomTab === 'home' || activeBottomTab === 'dotoriRoom') && (
-        <View style={styles.headerContainer}>
-          <SafeAreaView style={styles.headerSafeArea} edges={['top']}>
+        <BlurView intensity={40} tint="light" style={styles.headerContainer}>
+          <SafeAreaView edges={['top']}>
             <MainHeader
               onSearch={() => setCurrentView('search')}
-              logoHeightAnim={logoHeightAnim}
               rightButton={__DEV__ && activeBottomTab === 'dotoriRoom' ? (
                 <TouchableOpacity onPress={() => setCurrentView('createRoom')} style={{ paddingHorizontal: 12, paddingVertical: 8 }}>
                   <Text style={{ fontSize: 22, color: Colors.primary500 }}>＋</Text>
@@ -1865,7 +1868,7 @@ export default function App() {
               ) : undefined}
             />
           </SafeAreaView>
-        </View>
+        </BlurView>
       )}
 
       {/* Bottom Navigation */}
@@ -2022,6 +2025,17 @@ export default function App() {
           )
         }
         onClose={handleCloseHomeStartReading}
+        aboveButtons={
+          <Button
+            variant="text"
+            size="medium"
+            style={{ alignSelf: 'center', marginBottom: Spacing.md }}
+            textStyle={{ color: Colors.gray800, textDecorationLine: 'underline' }}
+            onPress={() => setHomeStartCompleteConfirm(true)}
+          >
+            완독했어요 🎉
+          </Button>
+        }
       >
         <TextField
           label=""
@@ -2040,6 +2054,31 @@ export default function App() {
           style={{ marginTop: Spacing.md }}
         />
       </ModalPopup>
+
+      <ModalPopup
+        visible={homeStartCompleteConfirm}
+        title="완독하시겠어요?"
+        primaryButtonText="완독"
+        secondaryButtonText="취소"
+        onSecondaryPress={() => setHomeStartCompleteConfirm(false)}
+        onClose={() => setHomeStartCompleteConfirm(false)}
+        onPrimaryPress={() => {
+          const book = homeStartReadingBook;
+          setHomeStartCompleteConfirm(false);
+          handleCloseHomeStartReading();
+          updateReadingBook(book, 'complete', {
+            currentPage: book?.totalPages,
+            totalPages: book?.totalPages,
+            isCompleted: true,
+          });
+        }}
+      />
+
+      <BookCompleteModal
+        visible={!!completedBookEvent}
+        book={completedBookEvent}
+        onClose={() => setCompletedBookEvent(null)}
+      />
 
       {/* Search Screen overlay */}
       {(currentView === 'search' || (currentView === 'bookDetail' && previousView === 'search')) && (

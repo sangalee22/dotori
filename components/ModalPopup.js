@@ -29,6 +29,7 @@ export default function ModalPopup({
   primaryButtonDisabled = false,
   children,
   descriptionStyle,
+  aboveButtons,
 }) {
   return (
     <Modal
@@ -48,6 +49,8 @@ export default function ModalPopup({
               )}
               {children}
             </View>
+
+            {aboveButtons}
 
             {/* Buttons */}
             <View style={[styles.buttonWrapper, hideSecondaryButton && styles.buttonWrapperCenter]}>

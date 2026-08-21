@@ -604,7 +604,6 @@ export default function DotoriRoomScreen({ readingBooks = [], reviews = [], read
           if (!book) return;
           onCompleteBook?.(book);
           setDetailItem(null);
-          setTimeout(() => showToast('완독! 한 권의 도토리가 쌓였어요 🌰'), 400);
         }}
       />
 

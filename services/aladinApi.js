@@ -6,7 +6,7 @@
 import { Platform } from 'react-native';
 
 const ALADIN_API_KEY = 'ttbsang_a0_01255001';
-const BASE_URL = 'http://www.aladin.co.kr/ttb/api';
+const BASE_URL = 'http://aladin.co.kr/ttb/api';
 
 const toHttpsCover = (url) => url?.replace(/^http:\/\//, 'https://') || null;
 
@@ -130,15 +130,16 @@ export const CATEGORY_LIST = [
  * @param {string} authorString - 원본 저자 문자열
  * @returns {string} 정리된 저자명
  */
-function decodeHtml(str) {
+export function decodeHtml(str) {
   if (!str) return '';
   return str
+    .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
-    .replace(/&amp;/g, '&')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/&nbsp;/g, ' ')
+    .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<[^>]*>/g, '')
     .trim();
 }
@@ -308,7 +309,7 @@ export async function fetchBestsellersByPeriod(period = 'weekly', category = '�
         isbn: book.isbn13 || book.isbn,
         publisher: book.publisher,
         pubDate: book.pubDate,
-        description: book.description,
+        description: decodeHtml(book.description),
       }));
     }
     return [];
@@ -347,6 +348,8 @@ export async function fetchBookDetail(itemId) {
 
     if (data && data.item && data.item.length > 0) {
       const item = data.item[0];
+      item.title = decodeHtml(item.title);
+      item.subTitle = decodeHtml(item.subTitle);
       item.description = decodeHtml(item.description);
       return item;
     }

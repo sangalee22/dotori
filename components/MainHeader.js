@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Colors, Spacing, Typography } from '../styles';
 import Logo from './Logo';
 import SearchIcon from './SearchIcon';
@@ -7,28 +7,17 @@ import IconButton from './IconButton';
 
 const LOGO_HEIGHT = 60;
 
-/**
- * MainHeader Component
- * @param {function} onSearch
- * @param {Array}    tabs          - [{ id, label }] optional tab list
- * @param {string}   activeTab     - active tab id
- * @param {function} onTabChange
- * @param {Animated.Value} logoHeightAnim - animated height for logo row (default 60)
- * @param {ReactNode} rightButton  - custom right button (overrides default search icon)
- */
-export default function MainHeader({ onSearch, tabs, activeTab, onTabChange, logoHeightAnim, rightButton }) {
+export default function MainHeader({ onSearch, tabs, activeTab, onTabChange, rightButton }) {
   return (
-    <View style={styles.wrapper}>
-      <Animated.View style={{ height: logoHeightAnim ?? LOGO_HEIGHT, overflow: 'hidden' }}>
-        <View style={styles.header}>
-          <Logo width={106} height={26} />
-          {rightButton ?? (
-            <IconButton onPress={onSearch}>
-              <SearchIcon width={24} height={24} />
-            </IconButton>
-          )}
-        </View>
-      </Animated.View>
+    <View>
+      <View style={styles.header}>
+        <Logo width={106} height={26} />
+        {rightButton ?? (
+          <IconButton onPress={onSearch}>
+            <SearchIcon width={24} height={24} />
+          </IconButton>
+        )}
+      </View>
 
       {tabs && (
         <View style={styles.tabContainer}>
@@ -51,8 +40,6 @@ export default function MainHeader({ onSearch, tabs, activeTab, onTabChange, log
 }
 
 const styles = StyleSheet.create({
-  wrapper: {
-  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',

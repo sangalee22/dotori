@@ -409,15 +409,20 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
   const [isEndPageModalVisible, setIsEndPageModalVisible] = React.useState(false);
   const [endPageInput, setEndPageInput] = React.useState('');
   const endPageInputRef = React.useRef(null);
+  const [pageModalCompleteConfirm, setPageModalCompleteConfirm] = React.useState(false);
   const [sessionReadingDays, setSessionReadingDays] = React.useState(1);
   const isManualResultRef = React.useRef(false);
   const isTimerCompleteRef = React.useRef(false);
+  const completedBookDataRef = React.useRef(null); // 완독 시 결과 모달 닫힌 후 이벤트 발생용
+  const onUpdateReadingRef = React.useRef(onUpdateReading);
+  onUpdateReadingRef.current = onUpdateReading;
   const [timerBook, setTimerBook] = React.useState(null);
   React.useEffect(() => { onActiveTimerChange?.(timerBook?.isbn ?? null); }, [timerBook]);
   const [timerBookTotalPages, setTimerBookTotalPages] = React.useState(0);
   const [manualResultBook, setManualResultBook] = React.useState(null);
   const [manualResultTotalPages, setManualResultTotalPages] = React.useState(0);
   const isBookSelectingRef = React.useRef(false);
+  const selectedBookTotalPagesRef = React.useRef(0);
   const isSavingRef = React.useRef(false);
   const isPlayPressRef = React.useRef(false);
 
@@ -682,6 +687,16 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
     });
   };
 
+  // 결과 모달이 완전히 닫힌 후 완독 이벤트 발생 (iOS onDismiss)
+  // — iOS는 Modal 동시 present 불가이므로 result modal이 완전히 사라진 뒤 BookCompleteModal 표시
+  const handleResultModalDismiss = React.useCallback(() => {
+    if (completedBookDataRef.current) {
+      const { book, totalPages } = completedBookDataRef.current;
+      completedBookDataRef.current = null;
+      onUpdateReadingRef.current?.(book, 'complete', { currentPage: totalPages, totalPages, isCompleted: true });
+    }
+  }, []);
+
   const closeResultModal = React.useCallback(() => {
     setIsResultModalVisible(false);
     setCustomCardBg(null);
@@ -836,7 +851,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
   const handleStartReading = () => {
     logEvent('timer_start', { isbn: selectedBook?.isbn });
     setTimerBook(selectedBook);
-    setTimerBookTotalPages(selectedBookTotalPages);
+    setTimerBookTotalPages(selectedBookTotalPagesRef.current || selectedBook?.totalPages || 0);
     setReadingStartTime(new Date());
     setReadingStartPage(parseInt(pageInput) || 0);
     setIsPageModalVisible(false);
@@ -880,16 +895,21 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
     }
     setSelectedBook(book);
     setSelectedBookTotalPages(0);
+    selectedBookTotalPagesRef.current = 0;
     setPageInput(book.currentPage > 0 ? String(book.currentPage) : '');
     setIsPageModalVisible(true);
     if (book.totalPages > 0) {
       setSelectedBookTotalPages(book.totalPages);
+      selectedBookTotalPagesRef.current = book.totalPages;
     } else if (book.isbn) {
       try {
         const detail = await fetchBookDetail(book.isbn);
-        setSelectedBookTotalPages(detail?.subInfo?.itemPage || 0);
+        const resolved = detail?.subInfo?.itemPage || 0;
+        setSelectedBookTotalPages(resolved);
+        selectedBookTotalPagesRef.current = resolved;
       } catch {
         setSelectedBookTotalPages(0);
+        selectedBookTotalPagesRef.current = 0;
       }
     }
   } finally {
@@ -907,11 +927,30 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
     if (isResultModalVisible) {
       if (isManualResultRef.current) {
         // 수동 기록은 endPage가 이미 설정되어 있으므로 입력 팝업 스킵
+      } else if (isTimerCompleteRef.current) {
+        // 완독 확정 → 페이지 입력 팝업 생략, totalPages로 자동 저장
+        const book = timerBook;
+        const totalPages = timerBookTotalPages || 0;
+        setEndPageInput(String(totalPages));
+        AsyncStorage.removeItem('timerPendingState').catch(() => {});
+        // onUpdateReading('complete')는 결과 모달 onDismiss 후 호출
+        // (iOS는 Modal 2개 동시 present 불가 — result modal이 완전히 닫힌 후 BookCompleteModal 표시)
+        completedBookDataRef.current = { book, totalPages };
+        onSaveReadingRecord?.({
+          date: new Date().toISOString().split('T')[0],
+          isbn: book?.isbn,
+          title: book?.title,
+          author: book?.author,
+          cover: book?.coverImage,
+          duration: resultElapsed,
+          createdAt: new Date().toISOString(),
+          startPage: readingStartPage,
+          endPage: totalPages,
+          totalPages,
+          source: 'timer',
+        });
       } else {
-        const prefill = isTimerCompleteRef.current && timerBookTotalPages > 0
-          ? String(timerBookTotalPages)
-          : '';
-        setEndPageInput(prefill);
+        setEndPageInput('');
         setIsEndPageModalVisible(true);
         // 앱 종료 시 복원을 위해 현재 결과 상태 저장
         AsyncStorage.setItem('timerPendingState', JSON.stringify({
@@ -1110,10 +1149,12 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
 
               {/* 말풍선: 앞으로 N페이지 */}
               {(() => {
-                const savedPage = currentBooks.find(b => String(b.isbn) === String(timerBook?.isbn))?.currentPage ?? 0;
+                const bookInList = currentBooks.find(b => String(b.isbn) === String(timerBook?.isbn));
+                const totalPages = timerBookTotalPages || bookInList?.totalPages || 0;
+                const savedPage = bookInList?.currentPage ?? 0;
                 const currentPage = Math.max(savedPage, readingStartPage);
-                const remaining = timerBookTotalPages - currentPage;
-                if (timerBookTotalPages <= 0 || remaining <= 0) return null;
+                const remaining = totalPages - currentPage;
+                if (totalPages <= 0 || remaining <= 0) return null;
                 return (
                   <View style={styles.timerSheetBubbleWrap}>
                     <View style={styles.timerSheetBubble}>
@@ -1130,9 +1171,11 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
 
               {/* 진도 바 */}
               {(() => {
-                const savedPage = currentBooks.find(b => String(b.isbn) === String(timerBook?.isbn))?.currentPage ?? 0;
+                const bookInList = currentBooks.find(b => String(b.isbn) === String(timerBook?.isbn));
+                const totalPages = timerBookTotalPages || bookInList?.totalPages || 0;
+                const savedPage = bookInList?.currentPage ?? 0;
                 const latestPage = Math.max(savedPage, readingStartPage);
-                const progressPct = timerBookTotalPages > 0 ? Math.min(100, Math.round(latestPage / timerBookTotalPages * 100)) : 0;
+                const progressPct = totalPages > 0 ? Math.min(100, Math.round(latestPage / totalPages * 100)) : 0;
                 return (
               <ProgressBar
                 progress={progressPct}
@@ -1236,7 +1279,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
         <Toast visible={timerToast.visible} message={timerToast.message} requestId={timerToast.requestId} />
       </Modal>
 
-      <Modal visible={isResultModalVisible} animationType="slide" onRequestClose={closeResultModal}>
+      <Modal visible={isResultModalVisible} animationType="slide" onRequestClose={closeResultModal} onDismiss={handleResultModalDismiss}>
         <View style={styles.resultModalContainer}>
           <DefaultHeader
             title="독서 결과"
@@ -1404,13 +1447,6 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
               const isCompleted = totalPages > 0 && endPage >= totalPages;
               setIsEndPageModalVisible(false);
               AsyncStorage.removeItem('timerPendingState').catch(() => {});
-              if (onUpdateReading && book) {
-                onUpdateReading(book, isCompleted ? 'complete' : 'updatePage', {
-                  currentPage: endPage,
-                  totalPages,
-                  isCompleted,
-                });
-              }
               if (onSaveReadingRecord && book) {
                 const ok = await onSaveReadingRecord({
                   date: new Date().toISOString().split('T')[0],
@@ -1427,12 +1463,52 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
                 });
                 if (ok === false) showResultToast('기록 저장에 실패했어요. 나중에 다시 시도해주세요.');
               }
+              if (isCompleted) {
+                completedBookDataRef.current = { book, totalPages };
+                closeResultModal();
+              } else {
+                if (onUpdateReading && book) {
+                  onUpdateReading(book, 'updatePage', { currentPage: endPage, totalPages, isCompleted: false });
+                }
+                closeResultModal();
+              }
             }}
             primaryButtonDisabled={
               !endPageInput.trim() ||
               (endPageInput.length > 1 && endPageInput.startsWith('0')) ||
               (timerBookTotalPages > 0 && parseInt(endPageInput) > timerBookTotalPages) ||
               parseInt(endPageInput) <= readingStartPage
+            }
+            aboveButtons={
+              <Button
+                variant="text"
+                size="medium"
+                style={{ alignSelf: 'center', marginBottom: Spacing.md }}
+                textStyle={{ color: Colors.gray800, textDecorationLine: 'underline' }}
+                onPress={() => {
+                  const book = timerBook;
+                  const totalPages = timerBookTotalPages;
+                  setIsEndPageModalVisible(false);
+                  AsyncStorage.removeItem('timerPendingState').catch(() => {});
+                  onSaveReadingRecord?.({
+                    date: new Date().toISOString().split('T')[0],
+                    isbn: book?.isbn,
+                    title: book?.title,
+                    author: book?.author,
+                    cover: book?.coverImage,
+                    duration: resultElapsed,
+                    createdAt: new Date().toISOString(),
+                    startPage: readingStartPage,
+                    endPage: totalPages,
+                    totalPages,
+                    source: 'timer',
+                  });
+                  completedBookDataRef.current = { book, totalPages };
+                  closeResultModal();
+                }}
+              >
+                완독했어요 🎉
+              </Button>
             }
           >
             <TextField
@@ -1459,6 +1535,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
               style={{ marginTop: Spacing.md }}
             />
           </ModalPopup>
+
         </View>
         </View>
       </Modal>
@@ -1590,6 +1667,25 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
               style={{ marginTop: Spacing.md }}
             />
           </ModalPopup>
+
+          <ModalPopup
+            visible={pageModalCompleteConfirm}
+            title="완독하시겠어요?"
+            primaryButtonText="완독"
+            secondaryButtonText="취소"
+            onSecondaryPress={() => setPageModalCompleteConfirm(false)}
+            onClose={() => setPageModalCompleteConfirm(false)}
+            onPrimaryPress={() => {
+              setPageModalCompleteConfirm(false);
+              setIsPageModalVisible(false);
+              setPageInput('');
+              onUpdateReading?.(selectedBook, 'complete', {
+                currentPage: selectedBookTotalPages,
+                totalPages: selectedBookTotalPages,
+                isCompleted: true,
+              });
+            }}
+          />
         </View>
       </Modal>
 
