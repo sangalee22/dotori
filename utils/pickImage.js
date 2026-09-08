@@ -1,5 +1,4 @@
 import * as ImagePicker from 'expo-image-picker';
-import * as ImageManipulator from 'expo-image-manipulator';
 
 export async function pickImageFromLibrary(callback) {
   const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -20,6 +19,7 @@ export async function takePhoto(callback) {
 // square=false: 긴 변 기준으로 maxSize 이하로 축소
 export async function resizeImage(uri, { maxSize = 1080, maxWidth = null, square = false } = {}) {
   try {
+    const ImageManipulator = require('expo-image-manipulator');
     if (square) {
       const result = await ImageManipulator.manipulateAsync(
         uri,

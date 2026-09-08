@@ -13,6 +13,7 @@ import SubTab from '../components/SubTab';
 import SimbolOutlineIcon from '../components/SimbolOutlineIcon';
 import SimbolFillIcon from '../components/SimbolFillIcon';
 import PlusFillIcon from '../components/PlusFillIcon';
+import PlusIcon from '../components/PlusIcon';
 import CommentIcon from '../components/CommentIcon';
 import CommentLargeIcon from '../components/CommentLargeIcon';
 import ReviewItem from '../components/ReviewItem';
@@ -30,6 +31,8 @@ import IconButton from '../components/IconButton';
 import Switch from '../components/Switch';
 import ChevronDownIcon from '../components/ChevronDownIcon';
 import CheckIcon from '../components/CheckIcon';
+import PlayIcon from '../components/PlayIcon';
+import PauseIcon from '../components/PauseIcon';
 import { useToast } from '../contexts/ToastContext';
 import { fetchBookDetail, searchBooks, formatAuthorForDetail, decodeHtml } from '../services/aladinApi';
 import { formatTimeAgo } from '../utils/formatTimeAgo';
@@ -89,6 +92,8 @@ export default function BookDetail({
   isTimerActive = false,
   discardTimerRef,
   completeTimerRef,
+  onOpenStartReading,
+  openTimerSheetRef,
   style,
 }) {
   const insets = useSafeAreaInsets();
@@ -189,6 +194,7 @@ export default function BookDetail({
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState(null);
   const [timerCompleteModalVisible, setTimerCompleteModalVisible] = React.useState(false);
+  const [completeConfirmVisible, setCompleteConfirmVisible] = React.useState(false);
 
   // Reading state - initialize from initialReadingState if provided
   const [isReading, setIsReading] = React.useState(initialReadingState?.isReading || false);
@@ -258,12 +264,6 @@ export default function BookDetail({
   const [pageInput, setPageInput] = React.useState('');
   const pageModalTranslateY = React.useRef(new Animated.Value(0)).current;
 
-  // 독서 시작 모달 (플레이 버튼) — 캘린더 수기입력과 별개
-  const [isStartReadingModalVisible, setIsStartReadingModalVisible] = React.useState(false);
-  const [startPageInput, setStartPageInput] = React.useState('');
-  const [startPageError, setStartPageError] = React.useState('');
-  const [startReadingCompleteConfirm, setStartReadingCompleteConfirm] = React.useState(false);
-  const startReadingModalTranslateY = React.useRef(new Animated.Value(300)).current;
 
   // PanResponder for page edit modal drag
   const pageEditPanResponder = React.useRef(
@@ -491,7 +491,7 @@ export default function BookDetail({
   // Handle page edit modal
   const handleOpenPageEdit = () => {
     if (isPageEditModalVisible) return;
-    setPageInput(currentPage === 0 ? '' : String(currentPage));
+    setPageInput(isTimerActive ? String(currentPage) : (currentPage === 0 ? '' : String(currentPage)));
     setIsPageEditModalVisible(true);
     Animated.spring(pageModalTranslateY, {
       toValue: 0,
@@ -571,16 +571,17 @@ export default function BookDetail({
     setReadingProgress(100);
     setIsCompleted(true);
 
-    if (onUpdateReading) {
-      onUpdateReading('complete', {
-        currentPage: totalPages,
-        totalPages,
-        isCompleted: true,
-        categoryName: bookData?.categoryName,
-      });
-    }
-
     handleClosePageEdit();
+    setTimeout(() => {
+      if (onUpdateReading) {
+        onUpdateReading('complete', {
+          currentPage: totalPages,
+          totalPages,
+          isCompleted: true,
+          categoryName: bookData?.categoryName,
+        });
+      }
+    }, 350);
   };
 
   const handleRestartBook = () => {
@@ -600,69 +601,6 @@ export default function BookDetail({
     showToast('처음부터 다시 읽어요!');
   };
 
-  // 독서 시작 모달 핸들러 (플레이 버튼 전용)
-  const handleOpenStartReading = () => {
-    if (isStartReadingModalVisible) return;
-    setStartPageInput('');
-    setStartPageError('');
-    setIsStartReadingModalVisible(true);
-    Animated.spring(startReadingModalTranslateY, {
-      toValue: 0,
-      useNativeDriver: true,
-      tension: 50,
-      friction: 10,
-    }).start();
-  };
-
-  const handleCloseStartReading = () => {
-    Animated.timing(startReadingModalTranslateY, {
-      toValue: 300,
-      duration: 200,
-      useNativeDriver: true,
-    }).start(() => {
-      setIsStartReadingModalVisible(false);
-      setStartPageInput('');
-      setStartPageError('');
-    });
-  };
-
-  const handleConfirmStartReading = () => {
-    const totalPages = bookData?.subInfo?.itemPage || 1000;
-    const inputNum = startPageInput.trim() === '' ? 0 : parseInt(startPageInput, 10);
-
-    if (isNaN(inputNum) || inputNum < 0) {
-      setStartPageError('올바른 페이지를 입력해주세요');
-      return;
-    }
-    if (inputNum > totalPages) {
-      setStartPageError('책의 마지막 페이지를 넘었어요');
-      return;
-    }
-    // 0은 처음부터 시작이라 항상 허용, 1 이상일 때만 현재 진도 체크
-    if (inputNum > 0 && inputNum < currentPage) {
-      setStartPageError('현재 진도율부터 읽을 수 있어요');
-      return;
-    }
-
-    setStartPageError('');
-    setIsReading(true);
-    // 0 입력 시 진도 초기화
-    const startPage = inputNum === 0 ? 0 : inputNum;
-    setCurrentPage(startPage);
-    const progress = totalPages > 0 ? Math.round((startPage / totalPages) * 100) : 0;
-    setReadingProgress(progress);
-
-    if (onUpdateReading) {
-      onUpdateReading('startReading', {
-        currentPage: startPage,
-        totalPages,
-        isCompleted: false,
-      });
-    }
-
-    handleCloseStartReading();
-    showToast(startPage === 0 ? '처음부터 읽어요!' : `${startPage}페이지부터 읽어요!`);
-  };
 
   // Handle review modal
   const handleOpenReview = () => {
@@ -941,6 +879,12 @@ export default function BookDetail({
             coverImage={displayCover}
             paddingTop={insets.top + 70}
             isLoading={isLoading}
+            isReading={isReading}
+            isCompleted={isCompleted}
+            readingProgress={readingProgress}
+            currentPage={currentPage}
+            totalPages={bookData?.subInfo?.itemPage || 0}
+            onOpenPageEdit={handleOpenPageEdit}
           />
         </View>
 
@@ -1289,8 +1233,9 @@ export default function BookDetail({
                   placeholder="페이지 입력"
                   keyboardType="number-pad"
                   returnKeyType="none"
-                  helpText="책의 출판사, 판쇄에 따라 페이지 수가 다를 수 있습니다"
-                  autoFocus={true}
+                  helpText={isTimerActive ? '타이머 기록중에는 페이지를 변경하실 수 없어요.' : '책의 출판사, 판쇄에 따라 페이지 수가 다를 수 있습니다'}
+                  autoFocus={!isTimerActive}
+                  disabled={isTimerActive}
                   inputAccessoryViewID="hideDoneButton"
                 />
               </View>
@@ -1298,36 +1243,40 @@ export default function BookDetail({
               {/* 버튼 영역 */}
               <View style={[styles.modalButtons, { paddingBottom: (keyboardHeight || 310) + Spacing.md }]}>
                 {isCompleted ? (
-                  <Button
-                    variant="outline"
-                    size="xlarge"
-                    onPress={handleRestartBook}
-                    style={styles.button}
-                  >
-                    처음부터 읽기
-                  </Button>
+                  <>
+                    <Button variant="outline" size="xlarge" onPress={handleRestartBook} style={styles.button}>
+                      처음부터 읽기
+                    </Button>
+                    <Button variant="primary" size="xlarge" onPress={handlePageUpdate} style={styles.button}>
+                      {isTimerActive ? '확인' : '수정'}
+                    </Button>
+                  </>
                 ) : (
-                  <Button
-                    variant="outline"
-                    size="xlarge"
-                    onPress={handleCompleteBook}
-                    style={styles.button}
-                  >
-                    완독
-                  </Button>
+                  <>
+                    <Button variant="outline" size="xlarge" onPress={isTimerActive ? handleCompleteBook : () => setCompleteConfirmVisible(true)} style={styles.button}>
+                      완독
+                    </Button>
+                    <Button variant="primary" size="xlarge" onPress={isTimerActive ? handleClosePageEdit : handlePageUpdate} style={styles.button}>
+                      {isTimerActive ? '확인' : '수정'}
+                    </Button>
+                  </>
                 )}
-                <Button
-                  variant="primary"
-                  size="xlarge"
-                  onPress={handlePageUpdate}
-                  style={styles.button}
-                >
-                  수정
-                </Button>
               </View>
             </Pressable>
           </Animated.View>
         </Pressable>
+
+        <ModalPopup
+          inline
+          visible={completeConfirmVisible}
+          title="완독 할까요?"
+          description="지금까지의 기록은 저장돼요"
+          primaryButtonText="완독"
+          secondaryButtonText="취소"
+          onSecondaryPress={() => setCompleteConfirmVisible(false)}
+          onClose={() => setCompleteConfirmVisible(false)}
+          onPrimaryPress={() => { setCompleteConfirmVisible(false); handleCompleteBook(); }}
+        />
 
         {/* Toast inside Modal */}
         <Toast
@@ -1337,104 +1286,6 @@ export default function BookDetail({
         />
       </Modal>
 
-      {/* 독서 시작 모달 (플레이 버튼 전용) */}
-      <Modal
-        visible={isStartReadingModalVisible}
-        transparent={true}
-        animationType="none"
-        onRequestClose={handleCloseStartReading}
-      >
-        <Pressable style={styles.modalOverlay} onPress={handleCloseStartReading}>
-          <Animated.View
-            style={[styles.modalContent, { transform: [{ translateY: startReadingModalTranslateY }] }]}
-          >
-            <Pressable onPress={(e) => e.stopPropagation()}>
-              <PopupHeader title="독서 시작" />
-              <View style={{ backgroundColor: Colors.white }}>
-              <View style={styles.modalBody}>
-
-                <TextField
-                  label="몇 페이지부터 읽을까요?"
-                  value={startPageInput}
-                  onChangeText={(text) => {
-                    const numeric = text.replace(/[^0-9]/g, '');
-                    setStartPageInput(numeric);
-                    setStartPageError('');
-                  }}
-                  placeholder="페이지 입력"
-                  keyboardType="number-pad"
-                  returnKeyType="none"
-                  helpText={startPageError || '0을 입력하시면 처음부터 읽어요'}
-                  error={!!startPageError}
-                  autoFocus={true}
-                  inputAccessoryViewID="hideDoneButton"
-                />
-              </View>
-              <Button
-                variant="text"
-                size="medium"
-                style={{ alignSelf: 'center', marginBottom: Spacing.md, backgroundColor: Colors.white }}
-                textStyle={{ color: Colors.gray800, textDecorationLine: 'underline' }}
-                onPress={() => {
-                  Animated.timing(startReadingModalTranslateY, {
-                    toValue: 300,
-                    duration: 200,
-                    useNativeDriver: true,
-                  }).start(() => {
-                    setIsStartReadingModalVisible(false);
-                    setStartPageInput('');
-                    setStartPageError('');
-                    setStartReadingCompleteConfirm(true);
-                  });
-                }}
-              >
-                완독했어요 🎉
-              </Button>
-              <View style={[styles.modalButtons, { paddingBottom: (keyboardHeight || 310) + Spacing.md }]}>
-                <Button
-                  variant="outline"
-                  size="xlarge"
-                  onPress={handleCloseStartReading}
-                  style={styles.button}
-                >
-                  취소
-                </Button>
-                <Button
-                  variant="primary"
-                  size="xlarge"
-                  onPress={handleConfirmStartReading}
-                  style={styles.button}
-                >
-                  시작하기
-                </Button>
-              </View>
-              </View>
-            </Pressable>
-          </Animated.View>
-        </Pressable>
-      </Modal>
-
-      <ModalPopup
-        visible={startReadingCompleteConfirm}
-        title="완독하시겠어요?"
-        primaryButtonText="완독"
-        secondaryButtonText="취소"
-        onSecondaryPress={() => setStartReadingCompleteConfirm(false)}
-        onClose={() => setStartReadingCompleteConfirm(false)}
-        onPrimaryPress={() => {
-          setStartReadingCompleteConfirm(false);
-          const totalPages = bookData?.subInfo?.itemPage || 1000;
-          setCurrentPage(totalPages);
-          setReadingProgress(100);
-          setIsCompleted(true);
-          onUpdateReading?.('complete', {
-            currentPage: totalPages,
-            totalPages,
-            isCompleted: true,
-            categoryName: bookData?.categoryName,
-          });
-        }}
-      />
 
       {/* Book Review Modal */}
       <Modal
@@ -1592,47 +1443,43 @@ export default function BookDetail({
           style={styles.bottomGradient}
         />
         <View style={styles.buttonGroup}>
-          {!isReading ? (
-            <Button
-              variant="primary"
-              size="xxlarge"
-              style={styles.readButton}
-              onPress={handleOpenStartReading}
-            >
-              읽기
-            </Button>
+          {isReading && isCompleted ? (
+            <TouchableOpacity style={styles.completedButton} onPress={handleOpenPageEdit} activeOpacity={0.8}>
+              <Text style={styles.completedButtonText}>완독 했어요! 🎉</Text>
+            </TouchableOpacity>
           ) : (
             <>
-              <Button
-                variant="outline"
-                size="xxlarge"
-                style={styles.writeReviewButton}
-                onPress={handleOpenReview}
-              >
-                독후감 쓰기
-              </Button>
-              {isCompleted ? (
-                <TouchableOpacity
-                  style={styles.completedButton}
-                  activeOpacity={0.7}
+              {!isReading && (
+                <Button
+                  variant="outline"
+                  size="xxlarge"
+                  style={styles.writeReviewButton}
+                  icon={<PlusIcon />}
                   onPress={handleOpenPageEdit}
                 >
-                  <Text style={styles.completedButtonText}>완독 했어요! 🎉 </Text>
-                </TouchableOpacity>
+                  읽는중
+                </Button>
+              )}
+              {isTimerActive ? (
+                <Button
+                  variant="outline"
+                  size="xxlarge"
+                  style={styles.readButton}
+                  icon={<PauseIcon />}
+                  onPress={() => openTimerSheetRef?.current?.()}
+                >
+                  정지
+                </Button>
               ) : (
-                <TouchableOpacity
-                  style={styles.readingStatusButton}
-                  activeOpacity={0.7}
-                  onPress={handleOpenPageEdit}
+                <Button
+                  variant="primary"
+                  size="xxlarge"
+                  style={styles.readButton}
+                  icon={<PlayIcon />}
+                  onPress={onOpenStartReading}
                 >
-                  <View style={styles.readingStatusContent}>
-                    <Text style={styles.readingProgressText}>{readingProgress}%</Text>
-                    <Text style={styles.readingStatusText}>읽는중</Text>
-                  </View>
-                  <View style={styles.readingProgressBar}>
-                    <View style={[styles.readingProgressFill, { width: `${readingProgress}%` }]} />
-                  </View>
-                </TouchableOpacity>
+                  독서기록
+                </Button>
               )}
             </>
           )}
@@ -1923,12 +1770,10 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
     zIndex: 1,
     width: '100%',
-    overflow: 'hidden',
     justifyContent: 'center',
   },
   readButton: {
-    width: '100%',
-    maxWidth: 296,
+    flex: 1,
   },
   writeReviewButton: {
     width: 140,
@@ -1971,6 +1816,7 @@ const styles = StyleSheet.create({
   },
   completedButton: {
     flex: 1,
+    maxWidth: 296,
     height: 52,
     backgroundColor: Colors.gray100,
     borderRadius: BorderRadius.xl,
@@ -2005,6 +1851,11 @@ const styles = StyleSheet.create({
   },
   button: {
     flex: 1,
+  },
+  completeBtnWrapper: {
+    flex: 1,
+    alignItems: 'center',
+    gap: Spacing.sm,
   },
   // Review Modal Styles
   reviewModalOverlay: {

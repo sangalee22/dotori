@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, Modal, ScrollView, KeyboardAvoidingView, ActivityIndicator, Platform, Animated, Easing, PanResponder, Pressable, AppState } from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet, Modal, ScrollView, KeyboardAvoidingView, ActivityIndicator, Platform, Animated, Easing, PanResponder, Pressable, AppState, Keyboard } from 'react-native';
 import { BlurView } from 'expo-blur';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { saveCardImage, captureCard } from '../utils/imageSave';
@@ -23,7 +23,7 @@ import BestBook from './BestBook';
 import ProgressBar from './ProgressBar';
 import ModalPopup from './ModalPopup';
 import Button from './Button';
-import { searchBooks, fetchBookDetail } from '../services/aladinApi';
+import { searchBooks, fetchBookDetail, decodeHtml } from '../services/aladinApi';
 import ReadingResultCard, { CARD_WIDTH, CARD_HEIGHT } from './ReadingResultCard';
 import Toast from './Toast';
 import Switch from './Switch';
@@ -255,7 +255,7 @@ function MyIcon({ active }) {
  * @param {function} onTabPress - Callback when tab is pressed, receives tab name
  * @param {object} style - Additional style overrides
  */
-export default function BottomNavigation({ activeTab = 'home', onTabPress, currentBooks = [], readingRecords = [], onUpdateReading, onWriteReview, onSaveReadingRecord, onReady, startTimerRef, checkTimerConflictRef, openTimerSheetRef, onActiveTimerChange, discardTimerRef, completeTimerRef, style }) {
+export default function BottomNavigation({ activeTab = 'home', onTabPress, currentBooks = [], readingRecords = [], onUpdateReading, onWriteReview, onSaveReadingRecord, onEditReadingRecord, onReady, startTimerRef, checkTimerConflictRef, openTimerSheetRef, onActiveTimerChange, discardTimerRef, completeTimerRef, style }) {
   const insets = useSafeAreaInsets();
   const { showToast } = useToast();
   const cardCaptureRef = React.useRef(null);
@@ -412,6 +412,9 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
   const [pageModalCompleteConfirm, setPageModalCompleteConfirm] = React.useState(false);
   const [sessionReadingDays, setSessionReadingDays] = React.useState(1);
   const isManualResultRef = React.useRef(false);
+  const savedResultRecordRef = React.useRef(null);
+  const [isResultPageEditVisible, setIsResultPageEditVisible] = React.useState(false);
+  const [resultPageEditInput, setResultPageEditInput] = React.useState('');
   const isTimerCompleteRef = React.useRef(false);
   const completedBookDataRef = React.useRef(null); // 완독 시 결과 모달 닫힌 후 이벤트 발생용
   const onUpdateReadingRef = React.useRef(onUpdateReading);
@@ -780,6 +783,10 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
     setHasSearched(false);
     setIsSearching(false);
     setPageInput('');
+    setIsPageModalVisible(false);
+    setPageModalCompleteConfirm(false);
+    isBookSelectingRef.current = false;
+    Keyboard.dismiss();
   };
 
   const handleConflictNewRecord = () => {
@@ -917,11 +924,6 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
   }
   };
 
-  React.useEffect(() => {
-    if (isPageModalVisible) {
-      setTimeout(() => pageInputRef.current?.focus(), 100);
-    }
-  }, [isPageModalVisible]);
 
   React.useEffect(() => {
     if (isResultModalVisible) {
@@ -1099,7 +1101,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
               {/* 책 정보 상단 섹션 */}
               {(() => {
                 const book = timerBook || selectedBook;
-                const fullTitle = book?.title ?? '';
+                const fullTitle = decodeHtml(book?.title ?? '');
                 const titleParts = fullTitle.split(' - ');
                 const displayTitle = titleParts[0].trim();
                 const displaySubtitle = titleParts.length > 1 ? titleParts.slice(1).join(' - ').trim() : undefined;
@@ -1124,9 +1126,9 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
                         )}
                       </View>
                       <View style={styles.timerTopBookData}>
-                        <Text style={styles.timerTopTitle}>{displayTitle}</Text>
-                        {displaySubtitle && <Text style={styles.timerTopSubtitle}>{displaySubtitle}</Text>}
-                        <Text style={styles.timerTopAuthor}>{book?.author ?? ''}</Text>
+                        <Text style={styles.timerTopTitle} lineBreakStrategyIOS="hangul-word">{displayTitle}</Text>
+                        {displaySubtitle && <Text style={styles.timerTopSubtitle} lineBreakStrategyIOS="hangul-word">{displaySubtitle}</Text>}
+                        <Text style={styles.timerTopAuthor} lineBreakStrategyIOS="hangul-word">{book?.author ?? ''}</Text>
                       </View>
                     </View>
                     <Text style={styles.timerSheetTime}>{formatTime(elapsed)}</Text>
@@ -1217,11 +1219,11 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
 
               {/* 정지 / 기록 시작 버튼 */}
               {!isPlaying && elapsed > 0 ? (
-                <Button variant="primary" size="xxlarge" leftIcon={<PlayIcon />} style={styles.timerSheetStopBtn} onPress={() => setIsPlaying(true)}>
+                <Button variant="primary" size="xxlarge" icon={<PlayIcon />} style={styles.timerSheetStopBtn} onPress={() => setIsPlaying(true)}>
                   기록 시작
                 </Button>
               ) : (
-                <Button variant="outline" size="xxlarge" leftIcon={<PauseIcon />} style={styles.timerSheetStopBtn} onPress={() => setTimerConfirmType('stop')}>
+                <Button variant="outline" size="xxlarge" icon={<PauseIcon />} style={styles.timerSheetStopBtn} onPress={() => setTimerConfirmType('stop')}>
                   정지
                 </Button>
               )}
@@ -1233,7 +1235,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
           </Animated.View>
         </Pressable>
 
-        {timerConfirmType !== null && (() => {
+        {(() => {
           const configs = {
             stop: {
               title: '독서를 그만할까요?',
@@ -1252,27 +1254,27 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
               onPrimary: () => { setTimerConfirmType(null); handleTimerReset(); },
             },
             complete: {
-              title: '완독하시겠어요?',
+              title: '완독 할까요?',
+              description: '지금까지의 기록은 저장돼요',
               secondaryText: '취소',
               primaryText: '완독',
               onSecondary: () => setTimerConfirmType(null),
               onPrimary: () => { setTimerConfirmType(null); handleTimerComplete(); },
             },
           };
-          const c = configs[timerConfirmType];
+          const c = timerConfirmType ? configs[timerConfirmType] : null;
           return (
-            <Pressable style={styles.timerConfirmOverlay} onPress={() => setTimerConfirmType(null)}>
-              <Pressable style={styles.timerConfirmBox} onPress={(e) => e.stopPropagation()}>
-                <View style={styles.timerConfirmBody}>
-                  <Text style={styles.timerConfirmTitle}>{c.title}</Text>
-                  {c.description && <Text style={styles.timerConfirmDesc}>{c.description}</Text>}
-                </View>
-                <View style={styles.timerConfirmButtons}>
-                  <Button variant="sub" size="xlarge" style={{ flex: 1 }} onPress={c.onSecondary}>{c.secondaryText}</Button>
-                  <Button variant="primary" size="xlarge" style={{ flex: 1 }} onPress={c.onPrimary}>{c.primaryText}</Button>
-                </View>
-              </Pressable>
-            </Pressable>
+            <ModalPopup
+              inline
+              visible={timerConfirmType !== null}
+              title={c?.title}
+              description={c?.description}
+              primaryButtonText={c?.primaryText}
+              secondaryButtonText={c?.secondaryText}
+              onSecondaryPress={c?.onSecondary}
+              onClose={() => setTimerConfirmType(null)}
+              onPrimaryPress={c?.onPrimary}
+            />
           );
         })()}
 
@@ -1336,7 +1338,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
                     }}
                   >
                     {resultAreaSize.width > 0 && (
-                      <View style={{ width: scaledW, height: scaledH, overflow: 'hidden' }}>
+                      <Pressable style={{ width: scaledW, height: scaledH, overflow: 'hidden' }} onPress={openCardMenu}>
                         <View style={{
                           width: CARD_WIDTH,
                           height: CARD_HEIGHT,
@@ -1357,13 +1359,12 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
                             displayScale={previewScale}
                             customBackground={customCardBg}
                             showBookInfo={showBookInfo}
+                            onEndPagePress={!isManualResultRef.current ? () => {
+                              setResultPageEditInput(endPageInput);
+                              setIsResultPageEditVisible(true);
+                            } : null}
                           />
                         </View>
-                        {/* 카드 전체를 덮는 투명 터치 오버레이 */}
-                        <Pressable
-                          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
-                          onPress={openCardMenu}
-                        />
                         {/* 책정보 토글 — style1/2에서만 카드 하단 중앙에 오버레이 */}
                         {(selectedVariant === 'style1' || selectedVariant === 'style2') && (
                           <View style={styles.bookInfoToggleRow}>
@@ -1371,7 +1372,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
                             <Switch value={showBookInfo} onValueChange={setShowBookInfo} />
                           </View>
                         )}
-                      </View>
+                      </Pressable>
                     )}
                   </View>
                 </>
@@ -1408,6 +1409,73 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
                 </Button>
               </View>
             </View>
+          <ModalPopup
+            inline
+            visible={isResultPageEditVisible}
+            title="어디까지 읽었나요?"
+            description={timerBook?.title?.split(' - ')[0].trim()}
+            descriptionStyle={{ color: Colors.primary500 }}
+            primaryButtonText="확인"
+            hideSecondaryButton
+            onClose={() => setIsResultPageEditVisible(false)}
+            primaryButtonDisabled={
+              !resultPageEditInput.trim() ||
+              (timerBookTotalPages > 0 && parseInt(resultPageEditInput) > timerBookTotalPages) ||
+              parseInt(resultPageEditInput) <= readingStartPage
+            }
+            onPrimaryPress={() => {
+              const newEndPage = parseInt(resultPageEditInput) || 0;
+              const totalPages = timerBookTotalPages;
+              setEndPageInput(String(newEndPage));
+              setIsResultPageEditVisible(false);
+              if (savedResultRecordRef.current) {
+                const updated = { ...savedResultRecordRef.current, endPage: newEndPage };
+                savedResultRecordRef.current = updated;
+                onEditReadingRecord?.(updated);
+              }
+              if (onUpdateReading && timerBook) {
+                onUpdateReading(timerBook, 'updatePage', { currentPage: newEndPage, totalPages, isCompleted: false });
+              }
+            }}
+            aboveButtons={
+              <Button
+                variant="text"
+                size="medium"
+                style={{ alignSelf: 'center', marginBottom: Spacing.md }}
+                textStyle={{ color: Colors.gray800, textDecorationLine: 'underline' }}
+                onPress={() => {
+                  setIsResultPageEditVisible(false);
+                  handleTimerComplete();
+                }}
+              >
+                완독했어요 🎉
+              </Button>
+            }
+          >
+            <TextField
+              placeholder="페이지를 입력해주세요"
+              value={resultPageEditInput}
+              onChangeText={text => setResultPageEditInput(text.replace(/[^0-9]/g, ''))}
+              keyboardType="number-pad"
+              returnKeyType="done"
+              helpText={
+                resultPageEditInput.length > 1 && resultPageEditInput.startsWith('0')
+                  ? '올바른 페이지 번호를 입력해주세요.'
+                  : timerBookTotalPages > 0 && parseInt(resultPageEditInput) > timerBookTotalPages
+                  ? `책의 마지막 페이지(${timerBookTotalPages}p)를 넘었어요.`
+                  : resultPageEditInput.trim() && parseInt(resultPageEditInput) <= readingStartPage
+                  ? `읽기 시작한 페이지(${readingStartPage}p)보다 커야 합니다.`
+                  : '읽기 시작한 페이지보다 큰 값을 입력해주세요.'
+              }
+              error={
+                (resultPageEditInput.length > 1 && resultPageEditInput.startsWith('0')) ||
+                (timerBookTotalPages > 0 && parseInt(resultPageEditInput) > timerBookTotalPages) ||
+                (resultPageEditInput.trim() !== '' && parseInt(resultPageEditInput) <= readingStartPage)
+              }
+              style={{ marginTop: Spacing.md }}
+            />
+          </ModalPopup>
+
           <Toast
             visible={resultToast.visible}
             message={resultToast.message}
@@ -1448,7 +1516,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
               setIsEndPageModalVisible(false);
               AsyncStorage.removeItem('timerPendingState').catch(() => {});
               if (onSaveReadingRecord && book) {
-                const ok = await onSaveReadingRecord({
+                const saved = await onSaveReadingRecord({
                   date: new Date().toISOString().split('T')[0],
                   isbn: book.isbn,
                   title: book.title,
@@ -1461,7 +1529,11 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
                   totalPages,
                   source: 'timer',
                 });
-                if (ok === false) showResultToast('기록 저장에 실패했어요. 나중에 다시 시도해주세요.');
+                if (saved === false) {
+                  showResultToast('기록 저장에 실패했어요. 나중에 다시 시도해주세요.');
+                } else {
+                  savedResultRecordRef.current = saved;
+                }
               }
               if (isCompleted) {
                 completedBookDataRef.current = { book, totalPages };
@@ -1470,7 +1542,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
                 if (onUpdateReading && book) {
                   onUpdateReading(book, 'updatePage', { currentPage: endPage, totalPages, isCompleted: false });
                 }
-                closeResultModal();
+                // 결과 카드 확인 후 완료 버튼으로 닫도록 모달 유지
               }
             }}
             primaryButtonDisabled={
@@ -1562,7 +1634,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
             />
             {/* <View style={styles.divider} /> */}
           </View>
-          <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalScrollContent}>
+          <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalScrollContent} keyboardShouldPersistTaps="handled">
             {isSearching ? (
               /* 로딩 중 */
               <View style={styles.loadingContainer}>
@@ -1625,52 +1697,77 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
               )
             )}
           </ScrollView>
-          <ModalPopup
-            visible={isPageModalVisible}
-            title="몇페이지부터 읽을까요?"
-            description={selectedBook?.title?.split(' - ')[0].trim()}
-            descriptionStyle={{ color: Colors.primary500 }}
-            primaryButtonText="시작"
-            secondaryButtonText="취소"
-            onPrimaryPress={handleStartReading}
-            primaryButtonDisabled={
-              !pageInput.trim() ||
-              (pageInput.length > 1 && pageInput.startsWith('0')) ||
-              (selectedBookTotalPages > 0 && parseInt(pageInput) > selectedBookTotalPages) ||
-              (selectedBook?.currentPage > 0 && parseInt(pageInput) < selectedBook.currentPage)
-            }
-            onClose={() => setIsPageModalVisible(false)}
-          >
-            <TextField
-              ref={pageInputRef}
-              placeholder="페이지를 입력해주세요"
-              helpText={
-                pageInput.length > 1 && pageInput.startsWith('0')
-                  ? '올바른 페이지 번호를 입력해주세요.'
-                  : selectedBookTotalPages > 0 && parseInt(pageInput) > selectedBookTotalPages
-                  ? `책의 마지막 페이지(${selectedBookTotalPages}p)를 넘었어요.`
-                  : selectedBook?.currentPage > 0 && parseInt(pageInput) < selectedBook.currentPage
-                  ? `읽고있는 페이지(${selectedBook.currentPage}p)보다 이전이에요.`
-                  : selectedBook?.currentPage > 0
-                  ? '현재 진도율 부터 읽을 수 있어요.'
-                  : '0을 입력하시면 처음부터 읽어요'
-              }
-              value={pageInput}
-              onChangeText={text => setPageInput(text.replace(/[^0-9]/g, ''))}
-              keyboardType="number-pad"
-              returnKeyType="done"
-              error={
-                (pageInput.length > 1 && pageInput.startsWith('0')) ||
-                (selectedBookTotalPages > 0 && parseInt(pageInput) > selectedBookTotalPages) ||
-                (selectedBook?.currentPage > 0 && parseInt(pageInput) < selectedBook.currentPage)
-              }
-              style={{ marginTop: Spacing.md }}
-            />
-          </ModalPopup>
+          {isPageModalVisible && (
+            <Pressable style={styles.timerConfirmOverlay} onPress={() => { Keyboard.dismiss(); setIsPageModalVisible(false); setPageInput(''); isBookSelectingRef.current = false; }}>
+              <Pressable style={styles.timerConfirmBox} onPress={(e) => e.stopPropagation()}>
+                <View style={styles.timerConfirmBody}>
+                  <Text style={styles.timerConfirmTitle}>몇페이지부터 읽을까요?</Text>
+                  {selectedBook?.title && (
+                    <Text style={[styles.timerConfirmDesc, { color: Colors.primary500 }]}>{selectedBook.title.split(' - ')[0].trim()}</Text>
+                  )}
+                  <TextField
+                    ref={pageInputRef}
+                    placeholder="페이지를 입력해주세요"
+                    helpText={
+                      pageInput.length > 1 && pageInput.startsWith('0')
+                        ? '올바른 페이지 번호를 입력해주세요.'
+                        : selectedBookTotalPages > 0 && parseInt(pageInput) > selectedBookTotalPages
+                        ? `책의 마지막 페이지(${selectedBookTotalPages}p)를 넘었어요.`
+                        : selectedBook?.currentPage > 0 && parseInt(pageInput) < selectedBook.currentPage
+                        ? `읽고있는 페이지(${selectedBook.currentPage}p)보다 이전이에요.`
+                        : selectedBook?.currentPage > 0
+                        ? '현재 진도율 부터 읽을 수 있어요.'
+                        : '0을 입력하시면 처음부터 읽어요'
+                    }
+                    value={pageInput}
+                    onChangeText={text => setPageInput(text.replace(/[^0-9]/g, ''))}
+                    keyboardType="number-pad"
+                    returnKeyType="done"
+                    error={
+                      (pageInput.length > 1 && pageInput.startsWith('0')) ||
+                      (selectedBookTotalPages > 0 && parseInt(pageInput) > selectedBookTotalPages) ||
+                      (selectedBook?.currentPage > 0 && parseInt(pageInput) < selectedBook.currentPage)
+                    }
+                    style={{ marginTop: Spacing.md, width: '100%' }}
+                  />
+                </View>
+                <Button
+                  variant="text"
+                  size="medium"
+                  style={{ alignSelf: 'center', marginBottom: Spacing.md }}
+                  textStyle={{ color: Colors.gray800, textDecorationLine: 'underline' }}
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    setIsPageModalVisible(false);
+                    setPageModalCompleteConfirm(true);
+                  }}
+                >
+                  완독했어요 🎉
+                </Button>
+                <View style={styles.timerConfirmButtons}>
+                  <Button variant="sub" size="xlarge" style={{ flex: 1 }} onPress={() => { Keyboard.dismiss(); setIsPageModalVisible(false); setPageInput(''); isBookSelectingRef.current = false; }}>취소</Button>
+                  <Button
+                    variant="primary"
+                    size="xlarge"
+                    style={{ flex: 1 }}
+                    disabled={
+                      !pageInput.trim() ||
+                      (pageInput.length > 1 && pageInput.startsWith('0')) ||
+                      (selectedBookTotalPages > 0 && parseInt(pageInput) > selectedBookTotalPages) ||
+                      (selectedBook?.currentPage > 0 && parseInt(pageInput) < selectedBook.currentPage)
+                    }
+                    onPress={handleStartReading}
+                  >시작</Button>
+                </View>
+              </Pressable>
+            </Pressable>
+          )}
 
           <ModalPopup
+            inline
             visible={pageModalCompleteConfirm}
-            title="완독하시겠어요?"
+            title="완독 할까요?"
+            description="지금까지의 기록은 저장돼요"
             primaryButtonText="완독"
             secondaryButtonText="취소"
             onSecondaryPress={() => setPageModalCompleteConfirm(false)}
@@ -1679,6 +1776,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
               setPageModalCompleteConfirm(false);
               setIsPageModalVisible(false);
               setPageInput('');
+              isBookSelectingRef.current = false;
               onUpdateReading?.(selectedBook, 'complete', {
                 currentPage: selectedBookTotalPages,
                 totalPages: selectedBookTotalPages,
@@ -1953,6 +2051,22 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     overflow: 'hidden',
+  },
+  resultPageEditRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.sm,
+    paddingVertical: Spacing.xs,
+  },
+  resultPageEditText: {
+    ...Typography.body2Regular,
+    color: Colors.gray500,
+  },
+  resultPageEditBtn: {
+    ...Typography.body2Medium,
+    color: Colors.primary500,
+    textDecorationLine: 'underline',
   },
   resultTabSection: {
     flexDirection: 'row',

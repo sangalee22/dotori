@@ -8,7 +8,7 @@ import IconButton from '../components/IconButton';
 import EditFillIcon from '../components/EditFillIcon';
 import FeedItem from '../components/FeedItem';
 import SubTab from '../components/SubTab';
-import SimbolOutlineIcon from '../components/SimbolOutlineIcon';
+import EmptyState from '../components/EmptyState';
 import SettingIcon from '../components/SettingIcon';
 import FireIcon from '../components/FireIcon';
 import DefaultHeader from '../components/DefaultHeader';
@@ -215,10 +215,7 @@ export default function MyScreen({ reviews = [], currentUser, readingRecords = [
               ))}
             </View>
           ) : (
-            <View style={styles.empty}>
-              <SimbolOutlineIcon width={24} height={24} color={Colors.gray400} />
-              <Text style={styles.emptyText}>아직 작성된 독후감이 없어요</Text>
-            </View>
+            <EmptyState text="아직 작성된 독후감이 없어요" />
           )}
         </ScrollView>
 
@@ -423,16 +420,6 @@ const styles = StyleSheet.create({
     // paddingHorizontal: Spacing.md,
     paddingBottom: Spacing.huge,
     // gap: Spacing.xxl,
-  },
-  empty: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.sm,
-    paddingTop: 80,
-  },
-  emptyText: {
-    ...Typography.subtitle1Medium,
-    color: Colors.gray500,
   },
   modalOverlay: {
     flex: 1,

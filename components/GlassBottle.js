@@ -1,7 +1,6 @@
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { View, Text, Image, Animated, StyleSheet, PanResponder, Pressable, Modal, TouchableOpacity } from 'react-native';
 import { BlurView } from 'expo-blur';
-import { Accelerometer } from 'expo-sensors';
 import Svg, { Path } from 'react-native-svg';
 import { ShapeYellow, ShapePurple } from './shapes';
 import { Colors, Typography, Spacing, BorderRadius } from '../styles';
@@ -225,22 +224,28 @@ export default function GlassBottle({ completedBooks = [], scrollViewRef }) {
   const dragOff = useRef({ x: 0, y: 0 });
   const prevAccel = useRef({ x: 0, y: 0 });
 
-  // ─── 가속도계 (흔들기) ──────────────────────────────────────
+  // ─── 가속도계 (흔들기) — expo-sensors는 네이티브 빌드에서만 활성화
   useEffect(() => {
-    Accelerometer.setUpdateInterval(33);
-    const sub = Accelerometer.addListener(({ x, y }) => {
-      const dx = x - prevAccel.current.x;
-      const dy = y - prevAccel.current.y;
-      prevAccel.current = { x, y };
-      if (Math.abs(dx) > 0.08 || Math.abs(dy) > 0.08) {
-        bodies.forEach(b => {
-          b.vx += dx * 4;
-          b.vy -= dy * 4;
-          b.sleeping = false;
-        });
-      }
-    });
-    return () => sub.remove();
+    const { requireOptionalNativeModule } = require('expo-modules-core');
+    if (!requireOptionalNativeModule('ExponentAccelerometer')) return;
+    let sub;
+    try {
+      const Accelerometer = require('expo-sensors/build/Accelerometer').default;
+      Accelerometer.setUpdateInterval(33);
+      sub = Accelerometer.addListener(({ x, y }) => {
+        const dx = x - prevAccel.current.x;
+        const dy = y - prevAccel.current.y;
+        prevAccel.current = { x, y };
+        if (Math.abs(dx) > 0.08 || Math.abs(dy) > 0.08) {
+          bodies.forEach(b => {
+            b.vx += dx * 4;
+            b.vy -= dy * 4;
+            b.sleeping = false;
+          });
+        }
+      });
+    } catch {}
+    return () => sub?.remove();
   }, []);
 
   // ─── 물리 루프 ──────────────────────────────────────────────

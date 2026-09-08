@@ -33,9 +33,6 @@ const GOOGLE_WEB_CLIENT_ID = '642592573898-elm8i8sjah4npkim86jcgr03vuarp41k.apps
 const GOOGLE_IOS_CLIENT_ID = '642592573898-4usjhm7pucep31piahrnj4sf4bdbgsbg.apps.googleusercontent.com';
 const GOOGLE_ANDROID_CLIENT_ID = '642592573898-elm8i8sjah4npkim86jcgr03vuarp41k.apps.googleusercontent.com';
 
-// expo-sensors는 네이티브 빌드에서만 활성화 — 없으면 shapes가 고정된 채로 표시됨
-let Accelerometer = null;
-try { Accelerometer = require('expo-sensors').Accelerometer; } catch {}
 
 // 책 이미지: 853×759 (가로가 살짝 더 넓은 열린 책)
 const BOOK_W = 144;
@@ -55,15 +52,20 @@ export default function LoginScreen({ onLogin, onSignUp, onDevBypass, onDevOnboa
 
   const PROVIDER_NAMES = { kakao: '카카오', google: '구글', apple: 'Apple' };
 
-  // 자이로(가속도계) 연결
+  // 자이로(가속도계) 연결 — expo-sensors는 네이티브 빌드에서만 활성화
   useEffect(() => {
-    if (!Accelerometer) return;
-    Accelerometer.setUpdateInterval(50);
-    const sub = Accelerometer.addListener(({ x, y }) => {
-      Animated.spring(tiltX, { toValue: x, useNativeDriver: true, damping: 18, stiffness: 70, mass: 0.6 }).start();
-      Animated.spring(tiltY, { toValue: -y, useNativeDriver: true, damping: 18, stiffness: 70, mass: 0.6 }).start();
-    });
-    return () => sub.remove();
+    const { requireOptionalNativeModule } = require('expo-modules-core');
+    if (!requireOptionalNativeModule('ExponentAccelerometer')) return;
+    let sub;
+    try {
+      const Accelerometer = require('expo-sensors/build/Accelerometer').default;
+      Accelerometer.setUpdateInterval(50);
+      sub = Accelerometer.addListener(({ x, y }) => {
+        Animated.spring(tiltX, { toValue: x, useNativeDriver: true, damping: 18, stiffness: 70, mass: 0.6 }).start();
+        Animated.spring(tiltY, { toValue: -y, useNativeDriver: true, damping: 18, stiffness: 70, mass: 0.6 }).start();
+      });
+    } catch {}
+    return () => sub?.remove();
   }, []);
 
   // sensitivity: 움직임 범위(px), rotation: 고정 회전각 (예: '-15deg')

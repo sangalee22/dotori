@@ -1,10 +1,11 @@
-import { Platform } from 'react-native';
+import { Platform, NativeModules } from 'react-native';
 
 let analyticsModule = null;
 
 async function getAnalytics() {
   if (analyticsModule) return analyticsModule;
   if (Platform.OS === 'web') return null;
+  if (!NativeModules.RNFBAppModule) return null;
   try {
     analyticsModule = (await import('@react-native-firebase/analytics')).default;
     return analyticsModule;

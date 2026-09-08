@@ -1,6 +1,5 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, Modal, Pressable, Dimensions, Animated, PanResponder } from 'react-native';
-import { Image as ExpoImage } from 'expo-image';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Typography, Spacing, BorderRadius } from '../styles';
@@ -320,11 +319,10 @@ const [isImageViewerVisible, setIsImageViewerVisible] = React.useState(false);
           >
             <View style={styles.bookCover}>
               {book.cover ? (
-                <ExpoImage
+                <Image
                   source={{ uri: book.cover }}
                   style={{ width: '100%', height: '100%' }}
-                  contentFit="cover"
-                  cachePolicy="memory-disk"
+                  resizeMode="cover"
                 />
               ) : (
                 <View style={[{ width: '100%', height: '100%' }, styles.bookCoverPlaceholder]} />
@@ -367,11 +365,10 @@ const [isImageViewerVisible, setIsImageViewerVisible] = React.useState(false);
                     activeOpacity={0.9}
                     onPress={() => handleImagePress(0)}
                   >
-                    <ExpoImage
+                    <Image
                       source={typeof images[0] === 'string' ? { uri: images[0] } : images[0]}
                       style={styles.feedImageSingle}
-                      contentFit="cover"
-                      cachePolicy="memory-disk"
+                      resizeMode="cover"
                     />
                   </TouchableOpacity>
                 ) : (
@@ -388,11 +385,10 @@ const [isImageViewerVisible, setIsImageViewerVisible] = React.useState(false);
                         activeOpacity={0.9}
                         onPress={() => handleImagePress(index)}
                       >
-                        <ExpoImage
+                        <Image
                           source={typeof image === 'string' ? { uri: image } : image}
                           style={styles.feedImage}
-                          contentFit="cover"
-                          cachePolicy="memory-disk"
+                          resizeMode="cover"
                         />
                       </TouchableOpacity>
                     ))}
@@ -578,11 +574,10 @@ const [isImageViewerVisible, setIsImageViewerVisible] = React.useState(false);
           >
             {images.map((image, index) => (
               <View key={index} style={styles.imageViewerPage}>
-                <ExpoImage
+                <Image
                   source={typeof image === 'string' ? { uri: image } : image}
                   style={styles.imageViewerImage}
-                  contentFit="contain"
-                  cachePolicy="memory-disk"
+                  resizeMode="contain"
                 />
               </View>
             ))}

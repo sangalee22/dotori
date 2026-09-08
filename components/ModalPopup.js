@@ -1,21 +1,8 @@
 import React from 'react';
-import { View, Text, StyleSheet, Modal, Pressable, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, Modal, Pressable, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
 import { Colors, Typography, Spacing, BorderRadius } from '../styles';
 import Button from './Button';
 
-/**
- * ModalPopup Component
- * @param {boolean} visible - Modal visibility
- * @param {string} title - Modal title
- * @param {string} description - Modal description (optional)
- * @param {string} primaryButtonText - Primary button text
- * @param {string} secondaryButtonText - Secondary button text (optional)
- * @param {function} onPrimaryPress - Primary button press handler
- * @param {function} onSecondaryPress - Secondary button press handler
- * @param {function} onClose - Close modal handler
- * @param {boolean} hideSecondaryButton - Hide secondary button (default: false)
- * @param {boolean} primaryButtonDisabled - Disable primary button (default: false)
- */
 export default function ModalPopup({
   visible = false,
   title,
@@ -25,56 +12,63 @@ export default function ModalPopup({
   onPrimaryPress,
   onSecondaryPress,
   onClose,
+  onDismiss,
   hideSecondaryButton = false,
   primaryButtonDisabled = false,
   children,
   descriptionStyle,
   aboveButtons,
+  inline = false,
 }) {
+  const content = (
+    <Pressable style={styles.container} onPress={(e) => e.stopPropagation()}>
+      <View style={styles.body}>
+        <Text style={styles.title}>{title}</Text>
+        {description && (
+          <Text style={[styles.description, descriptionStyle]}>{description}</Text>
+        )}
+        {children}
+      </View>
+      {aboveButtons}
+      <View style={[styles.buttonWrapper, hideSecondaryButton && styles.buttonWrapperCenter]}>
+        {!hideSecondaryButton && (
+          <Button variant="sub" size="xlarge" onPress={onSecondaryPress || onClose} style={styles.button}>
+            {secondaryButtonText}
+          </Button>
+        )}
+        <Button
+          variant="primary"
+          size="xlarge"
+          onPress={onPrimaryPress}
+          disabled={primaryButtonDisabled}
+          style={hideSecondaryButton ? styles.buttonSingle : styles.button}
+        >
+          {primaryButtonText}
+        </Button>
+      </View>
+    </Pressable>
+  );
+
+  if (inline) {
+    if (!visible) return null;
+    return (
+      <Pressable style={styles.inlineOverlay} onPress={() => onClose?.()}>
+        {content}
+      </Pressable>
+    );
+  }
+
   return (
     <Modal
       transparent={true}
       visible={visible}
-      animationType="fade"
-      onRequestClose={onClose}
+      animationType="none"
+      onRequestClose={() => { Keyboard.dismiss(); onClose?.(); }}
+      onDismiss={onDismiss}
     >
-      <Pressable style={styles.overlay} onPress={onClose}>
+      <Pressable style={styles.overlay} onPress={() => { Keyboard.dismiss(); onClose?.(); }}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <Pressable style={styles.container} onPress={(e) => e.stopPropagation()}>
-            {/* Body */}
-            <View style={styles.body}>
-              <Text style={styles.title}>{title}</Text>
-              {description && (
-                <Text style={[styles.description, descriptionStyle]}>{description}</Text>
-              )}
-              {children}
-            </View>
-
-            {aboveButtons}
-
-            {/* Buttons */}
-            <View style={[styles.buttonWrapper, hideSecondaryButton && styles.buttonWrapperCenter]}>
-              {!hideSecondaryButton && (
-                <Button
-                  variant="sub"
-                  size="xlarge"
-                  onPress={onSecondaryPress || onClose}
-                  style={styles.button}
-                >
-                  {secondaryButtonText}
-                </Button>
-              )}
-              <Button
-                variant="primary"
-                size="xlarge"
-                onPress={onPrimaryPress}
-                disabled={primaryButtonDisabled}
-                style={hideSecondaryButton ? styles.buttonSingle : styles.button}
-              >
-                {primaryButtonText}
-              </Button>
-            </View>
-          </Pressable>
+          {content}
         </KeyboardAvoidingView>
       </Pressable>
     </Modal>
@@ -87,6 +81,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  inlineOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 100,
   },
   container: {
     width: 300,

@@ -106,6 +106,7 @@ export default function App() {
   const [homeStartPageInput, setHomeStartPageInput] = React.useState('');
   const [homeStartPageError, setHomeStartPageError] = React.useState('');
   const [homeStartCompleteConfirm, setHomeStartCompleteConfirm] = React.useState(false);
+  const pendingCompleteBookRef = React.useRef(null);
   const [completedBookEvent, setCompletedBookEvent] = React.useState(null);
   const lastScrollY = React.useRef(0);
   const startTimerRef = React.useRef(null);
@@ -629,7 +630,7 @@ export default function App() {
               : b
           ));
         }
-        return true;
+        return saved;
       } catch {
         // Firestore 실패 시 pendingReadingRecords에 보관 (로그아웃해도 유지, 재로그인 시 동기화)
         const pendingItem = { ...record, _userId: currentUser.id };
@@ -1906,6 +1907,7 @@ export default function App() {
               setBookDetailReviewInitialImages(imageUri ? [imageUri] : []);
             }}
             onSaveReadingRecord={handleSaveReadingRecord}
+            onEditReadingRecord={handleEditReadingRecord}
             onReady={(openModal) => { openReadingModalRef.current = openModal; }}
             startTimerRef={startTimerRef}
             checkTimerConflictRef={checkTimerConflictRef}
@@ -1991,6 +1993,8 @@ export default function App() {
             isTimerActive={selectedBook && String(selectedBook.isbn) === String(activeTimerIsbn)}
             discardTimerRef={discardTimerRef}
             completeTimerRef={completeTimerRef}
+            openTimerSheetRef={openTimerSheetRef}
+            onOpenStartReading={() => handleOpenHomeStartReading(readingBookData || selectedBook)}
             initialReadingState={readingBookData ? {
               isReading: true,
               isCompleted: readingBookData.isCompleted || false,
@@ -2019,19 +2023,24 @@ export default function App() {
         secondaryButtonText="취소"
         onPrimaryPress={handleConfirmHomeStartReading}
         primaryButtonDisabled={
-          homeStartPageInput.trim() !== '' && (
-            isNaN(parseInt(homeStartPageInput, 10)) ||
-            (homeStartReadingBook?.totalPages > 0 && parseInt(homeStartPageInput, 10) > homeStartReadingBook.totalPages)
-          )
+          (homeStartPageInput.length > 1 && homeStartPageInput.startsWith('0')) ||
+          (homeStartReadingBook?.totalPages > 0 && parseInt(homeStartPageInput, 10) > homeStartReadingBook.totalPages) ||
+          (homeStartReadingBook?.currentPage > 0 && parseInt(homeStartPageInput, 10) < homeStartReadingBook.currentPage)
         }
         onClose={handleCloseHomeStartReading}
+        onDismiss={() => {
+          if (pendingCompleteBookRef.current) setHomeStartCompleteConfirm(true);
+        }}
         aboveButtons={
           <Button
             variant="text"
             size="medium"
             style={{ alignSelf: 'center', marginBottom: Spacing.md }}
             textStyle={{ color: Colors.gray800, textDecorationLine: 'underline' }}
-            onPress={() => setHomeStartCompleteConfirm(true)}
+            onPress={() => {
+              pendingCompleteBookRef.current = homeStartReadingBook;
+              handleCloseHomeStartReading();
+            }}
           >
             완독했어요 🎉
           </Button>
@@ -2040,16 +2049,26 @@ export default function App() {
         <TextField
           label=""
           value={homeStartPageInput}
-          onChangeText={(text) => {
-            setHomeStartPageInput(text.replace(/[^0-9]/g, ''));
-            setHomeStartPageError('');
-          }}
+          onChangeText={(text) => setHomeStartPageInput(text.replace(/[^0-9]/g, ''))}
           placeholder="페이지 입력"
           keyboardType="number-pad"
           returnKeyType="done"
-          helpText={homeStartPageError || '0을 입력하시면 처음부터 읽어요'}
-          error={!!homeStartPageError}
-          autoFocus
+          helpText={
+            homeStartPageInput.length > 1 && homeStartPageInput.startsWith('0')
+              ? '올바른 페이지 번호를 입력해주세요.'
+              : homeStartReadingBook?.totalPages > 0 && parseInt(homeStartPageInput) > homeStartReadingBook.totalPages
+              ? `책의 마지막 페이지(${homeStartReadingBook.totalPages}p)를 넘었어요.`
+              : homeStartReadingBook?.currentPage > 0 && parseInt(homeStartPageInput) < homeStartReadingBook.currentPage
+              ? `읽고있는 페이지(${homeStartReadingBook.currentPage}p)보다 이전이에요.`
+              : homeStartReadingBook?.currentPage > 0
+              ? '현재 진도율 부터 읽을 수 있어요.'
+              : '0을 입력하시면 처음부터 읽어요'
+          }
+          error={
+            (homeStartPageInput.length > 1 && homeStartPageInput.startsWith('0')) ||
+            (homeStartReadingBook?.totalPages > 0 && parseInt(homeStartPageInput) > homeStartReadingBook.totalPages) ||
+            (homeStartReadingBook?.currentPage > 0 && parseInt(homeStartPageInput) < homeStartReadingBook.currentPage)
+          }
           inputAccessoryViewID="hideDoneButton"
           style={{ marginTop: Spacing.md }}
         />
@@ -2057,15 +2076,16 @@ export default function App() {
 
       <ModalPopup
         visible={homeStartCompleteConfirm}
-        title="완독하시겠어요?"
+        title="완독 할까요?"
+        description="지금까지의 기록은 저장돼요"
         primaryButtonText="완독"
         secondaryButtonText="취소"
-        onSecondaryPress={() => setHomeStartCompleteConfirm(false)}
-        onClose={() => setHomeStartCompleteConfirm(false)}
+        onSecondaryPress={() => { pendingCompleteBookRef.current = null; setHomeStartCompleteConfirm(false); }}
+        onClose={() => { pendingCompleteBookRef.current = null; setHomeStartCompleteConfirm(false); }}
         onPrimaryPress={() => {
-          const book = homeStartReadingBook;
+          const book = pendingCompleteBookRef.current;
+          pendingCompleteBookRef.current = null;
           setHomeStartCompleteConfirm(false);
-          handleCloseHomeStartReading();
           updateReadingBook(book, 'complete', {
             currentPage: book?.totalPages,
             totalPages: book?.totalPages,

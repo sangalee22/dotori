@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Image, ImageBackground, StyleSheet } from 'react-native';
+import { View, Text, Image, ImageBackground, StyleSheet, Pressable } from 'react-native';
 import { Colors, Spacing } from '../styles';
 import Svg, { Path } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -88,6 +88,7 @@ export default function ReadingResultCard({
   customBackground = null,
   showBookInfo = true,
   dateOnly = false,
+  onEndPagePress = null,
 }) {
   const theme = THEMES[variant] ?? THEMES.dark;
   const blurRadius = displayScale > 0 ? BASE_BLUR / displayScale : BASE_BLUR;
@@ -176,10 +177,10 @@ export default function ReadingResultCard({
             </Text>
           )}
           <View style={[styles.stats, { justifyContent: 'center' }]}>
-            <View style={[styles.statItem, { alignItems: 'center' }]}>
-              <Text style={[styles.statValue, { color: STYLE1_TEXT, fontFamily: 'LeeSeoyun', fontSize: 80, fontWeight: 'normal' }]}>{pagesRead}</Text>
+            <Pressable style={[styles.statItem, { alignItems: 'center' }]} onPress={onEndPagePress} disabled={!onEndPagePress}>
+              <Text style={[styles.statValue, { color: STYLE1_TEXT, fontFamily: 'LeeSeoyun', fontSize: 80, fontWeight: 'normal' }, onEndPagePress && { textDecorationLine: 'underline' }]}>{pagesRead}</Text>
               <Text style={[styles.statLabel, { color: STYLE1_MUTED, fontFamily: 'LeeSeoyun', fontWeight: 'normal' }]}>pages</Text>
-            </View>
+            </Pressable>
             <View style={[styles.statItem, { alignItems: 'center' }]}>
               <Text style={[styles.statValue, { color: STYLE1_TEXT, fontFamily: 'LeeSeoyun', fontSize: 80, fontWeight: 'normal' }]}>{progress}</Text>
               <Text style={[styles.statLabel, { color: STYLE1_MUTED, fontFamily: 'LeeSeoyun', fontWeight: 'normal' }]}>progress</Text>
@@ -221,10 +222,10 @@ export default function ReadingResultCard({
             </Text>
           )}
           <View style={[styles.stats, { justifyContent: 'center' }]}>
-            <View style={[styles.statItem, { alignItems: 'center' }]}>
-              <Text style={[styles.statValue, { color: STYLE1_TEXT, fontFamily: 'OkMallangB', fontSize: 80 }]}>{pagesRead}</Text>
+            <Pressable style={[styles.statItem, { alignItems: 'center' }]} onPress={onEndPagePress} disabled={!onEndPagePress}>
+              <Text style={[styles.statValue, { color: STYLE1_TEXT, fontFamily: 'OkMallangB', fontSize: 80 }, onEndPagePress && { textDecorationLine: 'underline' }]}>{pagesRead}</Text>
               <Text style={[styles.statLabel, { color: STYLE1_MUTED, fontFamily: 'LeeSeoyun' }]}>pages</Text>
-            </View>
+            </Pressable>
             <View style={[styles.statItem, { alignItems: 'center' }]}>
               <Text style={[styles.statValue, { color: STYLE1_TEXT, fontFamily: 'OkMallangB', fontSize: 80 }]}>{progress}</Text>
               <Text style={[styles.statLabel, { color: STYLE1_MUTED, fontFamily: 'LeeSeoyun' }]}>progress</Text>
@@ -315,10 +316,10 @@ export default function ReadingResultCard({
             <Text style={[styles.elapsedTime, { color: theme.text, fontFamily: 'Paperlogy-Medium' }]}>{formatTimeShort(elapsed)}</Text>
           )}
           <View style={styles.stats}>
-            <View style={styles.statItem}>
-              <Text style={[styles.statValue, { color: theme.text, fontFamily: 'Paperlogy-SemiBold' }]}>{pagesRead}</Text>
+            <Pressable style={styles.statItem} onPress={onEndPagePress} disabled={!onEndPagePress}>
+              <Text style={[styles.statValue, { color: theme.text, fontFamily: 'Paperlogy-SemiBold' }, onEndPagePress && { textDecorationLine: 'underline' }]}>{pagesRead}</Text>
               <Text style={[styles.statLabel, { color: theme.textMuted60, fontFamily: 'Paperlogy-Regular' }]}>pages</Text>
-            </View>
+            </Pressable>
             <View style={styles.statItem}>
               <Text style={[styles.statValue, { color: theme.text, fontFamily: 'Paperlogy-SemiBold' }]}>{progress}</Text>
               <Text style={[styles.statLabel, { color: theme.textMuted60, fontFamily: 'Paperlogy-Regular' }]}>progress</Text>

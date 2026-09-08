@@ -12,9 +12,11 @@ export default function ProgressBar({
   progress = 0,
   leftLabel,
   rightLabel,
+  trackColor: trackColorProp,
   style,
 }) {
-  const { height, fillColor, trackColor } = SIZE[size] ?? SIZE.m;
+  const { height, fillColor, trackColor: defaultTrackColor } = SIZE[size] ?? SIZE.m;
+  const trackColor = trackColorProp ?? defaultTrackColor;
   const clampedProgress = Math.min(100, Math.max(0, progress));
 
   return (
