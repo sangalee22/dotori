@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 54;
+	objectVersion = 70;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -13,9 +13,40 @@
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
 		C0B6399E3D487EF754354589 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97BD96F504A3615ADEFAD132 /* ExpoModulesProvider.swift */; };
 		CA3EE03B8BD95A081E913CB2 /* libPods-dotori.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 45E4617331FFBF0DE0D130D1 /* libPods-dotori.a */; };
+		EBECA2CC306BA4E300B44842 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EBECA2CB306BA4E300B44842 /* WidgetKit.framework */; };
+		EBECA2CE306BA4E300B44842 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EBECA2CD306BA4E300B44842 /* SwiftUI.framework */; };
+		EBECA2DB306BA4E400B44842 /* TimerLiveActivityExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = EBECA2CA306BA4E300B44842 /* TimerLiveActivityExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		EBECA2F1306BA72400B44842 /* LiveActivityModule.m in Sources */ = {isa = PBXBuildFile; fileRef = EBECA2EF306BA72400B44842 /* LiveActivityModule.m */; };
+		EBECA2F2306BA72400B44842 /* LiveActivityModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBECA2F0306BA72400B44842 /* LiveActivityModule.swift */; };
+		EBECA2F4306BA73900B44842 /* TimerActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBECA2F3306BA73900B44842 /* TimerActivityAttributes.swift */; };
+		EBECA2F5306BA73900B44842 /* TimerActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBECA2F3306BA73900B44842 /* TimerActivityAttributes.swift */; };
 		EEEA9D653CB204098FA97BAD /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 103F90FCCE83B8A152B57E28 /* PrivacyInfo.xcprivacy */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		EBECA2D9306BA4E400B44842 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 83CBB9F71A601CBA00E9B192 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = EBECA2C9306BA4E300B44842;
+			remoteInfo = TimerLiveActivityExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		EBECA2DC306BA4E400B44842 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				EBECA2DB306BA4E400B44842 /* TimerLiveActivityExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		103F90FCCE83B8A152B57E28 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = dotori/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -29,10 +60,30 @@
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
 		DD868769A98F75B11CA425CA /* Pods-dotori.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-dotori.debug.xcconfig"; path = "Target Support Files/Pods-dotori/Pods-dotori.debug.xcconfig"; sourceTree = "<group>"; };
 		E42BF7B63028462C9A62BB6D /* GoogleService-Info.plist */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 4; includeInIndex = 0; lastKnownFileType = text.plist.xml; name = "GoogleService-Info.plist"; path = "dotori/GoogleService-Info.plist"; sourceTree = "<group>"; };
+		EBECA2CA306BA4E300B44842 /* TimerLiveActivityExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TimerLiveActivityExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		EBECA2CB306BA4E300B44842 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		EBECA2CD306BA4E300B44842 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		EBECA2EF306BA72400B44842 /* LiveActivityModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = LiveActivityModule.m; sourceTree = "<group>"; };
+		EBECA2F0306BA72400B44842 /* LiveActivityModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityModule.swift; sourceTree = "<group>"; };
+		EBECA2F3306BA73900B44842 /* TimerActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerActivityAttributes.swift; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = dotori/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* dotori-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "dotori-Bridging-Header.h"; path = "dotori/dotori-Bridging-Header.h"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		EBECA2DF306BA4E400B44842 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = EBECA2C9306BA4E300B44842 /* TimerLiveActivityExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		EBECA2CF306BA4E300B44842 /* TimerLiveActivity */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (EBECA2DF306BA4E400B44842 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = TimerLiveActivity; sourceTree = "<group>"; };
+/* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		13B07F8C1A680F5B00A75B9A /* Frameworks */ = {
@@ -40,6 +91,15 @@
 			buildActionMask = 2147483647;
 			files = (
 				CA3EE03B8BD95A081E913CB2 /* libPods-dotori.a in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		EBECA2C7306BA4E300B44842 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				EBECA2CE306BA4E300B44842 /* SwiftUI.framework in Frameworks */,
+				EBECA2CC306BA4E300B44842 /* WidgetKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -66,6 +126,8 @@
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
 				45E4617331FFBF0DE0D130D1 /* libPods-dotori.a */,
+				EBECA2CB306BA4E300B44842 /* WidgetKit.framework */,
+				EBECA2CD306BA4E300B44842 /* SwiftUI.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -107,10 +169,14 @@
 			children = (
 				13B07FAE1A68108700A75B9A /* dotori */,
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
+				EBECA2CF306BA4E300B44842 /* TimerLiveActivity */,
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
 				53CC9EB9E867627AE9FA4B84 /* Pods */,
 				59C97F6974B46E5ABDBC6B19 /* ExpoModulesProviders */,
+				EBECA2EF306BA72400B44842 /* LiveActivityModule.m */,
+				EBECA2F0306BA72400B44842 /* LiveActivityModule.swift */,
+				EBECA2F3306BA73900B44842 /* TimerActivityAttributes.swift */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -121,6 +187,7 @@
 			isa = PBXGroup;
 			children = (
 				13B07F961A680F5B00A75B9A /* app.app */,
+				EBECA2CA306BA4E300B44842 /* TimerLiveActivityExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -149,17 +216,41 @@
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */,
 				B1702624AD22E8857D5F15BC /* [CP] Embed Pods Frameworks */,
+				EBECA2DC306BA4E400B44842 /* Embed Foundation Extensions */,
 				1E73292B04ADECA5EFA270AB /* [CP-User] [RNGoogleMobileAds] Configuration */,
 				B19DACA1D8863B6F2845910F /* [CP-User] [RNFB] Core Configuration */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				EBECA2DA306BA4E400B44842 /* PBXTargetDependency */,
 			);
 			name = dotori;
 			productName = dotori;
 			productReference = 13B07F961A680F5B00A75B9A /* app.app */;
 			productType = "com.apple.product-type.application";
+		};
+		EBECA2C9306BA4E300B44842 /* TimerLiveActivityExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = EBECA2E0306BA4E400B44842 /* Build configuration list for PBXNativeTarget "TimerLiveActivityExtension" */;
+			buildPhases = (
+				EBECA2C6306BA4E300B44842 /* Sources */,
+				EBECA2C7306BA4E300B44842 /* Frameworks */,
+				EBECA2C8306BA4E300B44842 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				EBECA2CF306BA4E300B44842 /* TimerLiveActivity */,
+			);
+			name = TimerLiveActivityExtension;
+			packageProductDependencies = (
+			);
+			productName = TimerLiveActivityExtension;
+			productReference = EBECA2CA306BA4E300B44842 /* TimerLiveActivityExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -167,10 +258,14 @@
 		83CBB9F71A601CBA00E9B192 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
+				LastSwiftUpdateCheck = 2660;
 				LastUpgradeCheck = 1130;
 				TargetAttributes = {
 					13B07F861A680F5B00A75B9A = {
 						LastSwiftMigration = 1250;
+					};
+					EBECA2C9306BA4E300B44842 = {
+						CreatedOnToolsVersion = 26.6;
 					};
 				};
 			};
@@ -188,6 +283,7 @@
 			projectRoot = "";
 			targets = (
 				13B07F861A680F5B00A75B9A /* dotori */,
+				EBECA2C9306BA4E300B44842 /* TimerLiveActivityExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -202,6 +298,13 @@
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
 				EEEA9D653CB204098FA97BAD /* PrivacyInfo.xcprivacy in Resources */,
 				7685C2746B0C425FA5ACBDE9 /* GoogleService-Info.plist in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		EBECA2C8306BA4E300B44842 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -401,11 +504,30 @@
 			buildActionMask = 2147483647;
 			files = (
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
+				EBECA2F1306BA72400B44842 /* LiveActivityModule.m in Sources */,
+				EBECA2F5306BA73900B44842 /* TimerActivityAttributes.swift in Sources */,
+				EBECA2F2306BA72400B44842 /* LiveActivityModule.swift in Sources */,
 				C0B6399E3D487EF754354589 /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		EBECA2C6306BA4E300B44842 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				EBECA2F4306BA73900B44842 /* TimerActivityAttributes.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		EBECA2DA306BA4E400B44842 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = EBECA2C9306BA4E300B44842 /* TimerLiveActivityExtension */;
+			targetProxy = EBECA2D9306BA4E400B44842 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
@@ -415,7 +537,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = dotori/dotori.entitlements;
-				CURRENT_PROJECT_VERSION = 45;
+				CURRENT_PROJECT_VERSION = 50;
 				DEVELOPMENT_TEAM = 72WTFG6RDD;
 				ENABLE_BITCODE = NO;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -435,7 +557,8 @@
 					"-lc++",
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
-				PRODUCT_BUNDLE_IDENTIFIER = com.sanga.dotori.dev;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				PRODUCT_BUNDLE_IDENTIFIER = com.sanga.dotori;
 				PRODUCT_NAME = app;
 				SWIFT_OBJC_BRIDGING_HEADER = "dotori/dotori-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -452,7 +575,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = dotori/dotori.entitlements;
-				CURRENT_PROJECT_VERSION = 45;
+				CURRENT_PROJECT_VERSION = 50;
 				DEVELOPMENT_TEAM = 72WTFG6RDD;
 				INFOPLIST_FILE = dotori/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
@@ -466,8 +589,9 @@
 					"-ObjC",
 					"-lc++",
 				);
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
-				PRODUCT_BUNDLE_IDENTIFIER = com.sanga.dotori.dev;
+				PRODUCT_BUNDLE_IDENTIFIER = com.sanga.dotori;
 				PRODUCT_NAME = app;
 				SWIFT_OBJC_BRIDGING_HEADER = "dotori/dotori-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
@@ -592,6 +716,99 @@
 			};
 			name = Release;
 		};
+		EBECA2DD306BA4E400B44842 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 72WTFG6RDD;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TimerLiveActivity/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = TimerLiveActivity;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.6;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.sanga.dotori.TimerLiveActivity;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		EBECA2DE306BA4E400B44842 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 72WTFG6RDD;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TimerLiveActivity/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = TimerLiveActivity;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.6;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 1.0;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.sanga.dotori.TimerLiveActivity;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -609,6 +826,15 @@
 			buildConfigurations = (
 				83CBBA201A601CBA00E9B192 /* Debug */,
 				83CBBA211A601CBA00E9B192 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		EBECA2E0306BA4E400B44842 /* Build configuration list for PBXNativeTarget "TimerLiveActivityExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				EBECA2DD306BA4E400B44842 /* Debug */,
+				EBECA2DE306BA4E400B44842 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

@@ -1,7 +1,7 @@
 import React from 'react';
 import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View, ScrollView, Image, useWindowDimensions, TouchableOpacity, ActivityIndicator, Platform, Keyboard, Animated, Modal, Pressable } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, Image, useWindowDimensions, TouchableOpacity, ActivityIndicator, Platform, Keyboard, Animated, Modal, Pressable, AppState } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -130,7 +130,7 @@ export default function App() {
     adPopupCheckedRef.current = true;
     AsyncStorage.getItem('adPopup_skipDate').then(skipDate => {
       if (skipDate !== new Date().toDateString()) {
-        setTimeout(() => setShowAdPopup(true), 1500);
+        setShowAdPopup(true);
       }
     }).catch(() => {});
   }, [isLoggedIn, showSplash]);
@@ -497,40 +497,58 @@ export default function App() {
       const userPending = pending.filter(r => r._userId === userId);
       if (userPending.length === 0) return;
 
-      const succeeded = [];
+      const succeededTempIds = [];
       const synced = [];
       for (const item of userPending) {
         try {
-          const { _userId, ...firestoreRecord } = item;
+          const { _userId, _tempId, ...firestoreRecord } = item;
           const docRef = await addReadingRecord(userId, firestoreRecord);
-          synced.push({ ...item, id: docRef.id });
-          succeeded.push(item.createdAt);
+          synced.push({ _tempId, ...firestoreRecord, id: docRef.id });
+          succeededTempIds.push(_tempId ?? item.createdAt);
         } catch {}
       }
 
-      // Remove successfully synced from pending store
-      const remaining = pending.filter(r => !(r._userId === userId && succeeded.includes(r.createdAt)));
+      const remaining = pending.filter(r => {
+        if (r._userId !== userId) return true;
+        return !succeededTempIds.includes(r._tempId ?? r.createdAt);
+      });
       if (remaining.length === 0) {
         await AsyncStorage.removeItem('pendingReadingRecords').catch(() => {});
       } else {
         await AsyncStorage.setItem('pendingReadingRecords', JSON.stringify(remaining)).catch(() => {});
       }
 
-      // Merge synced records into readingRecords
       if (synced.length > 0) {
         setReadingRecords(prev => {
-          const existingKeys = new Set(prev.map(r => `${r.isbn}_${r.createdAt}`));
-          const newOnes = synced
-            .map(({ _userId, ...r }) => r)
-            .filter(r => !existingKeys.has(`${r.isbn}_${r.createdAt}`));
-          if (newOnes.length === 0) return prev;
-          const updated = [...prev, ...newOnes];
-          AsyncStorage.setItem('readingRecords', JSON.stringify(updated)).catch(() => {});
-          return updated;
+          let next = [...prev];
+          for (const item of synced) {
+            const { _tempId, ...realRecord } = item;
+            const pendingIdx = _tempId ? next.findIndex(r => r._tempId === _tempId) : -1;
+            if (pendingIdx !== -1) {
+              next[pendingIdx] = realRecord;
+            } else {
+              const key = `${realRecord.isbn}_${realRecord.createdAt}`;
+              if (!next.some(r => `${r.isbn}_${r.createdAt}` === key)) {
+                next.push(realRecord);
+              }
+            }
+          }
+          AsyncStorage.setItem('readingRecords', JSON.stringify(next)).catch(() => {});
+          return next;
         });
       }
     } catch {}
   }, []);
+
+  // 포그라운드 복귀 시 pending 기록 자동 sync
+  React.useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && currentUser?.id) {
+        syncPendingRecords(currentUser.id);
+      }
+    });
+    return () => sub.remove();
+  }, [currentUser?.id, syncPendingRecords]);
 
   // Firebase Auth 상태 감지 + Firestore 데이터 로드
   React.useEffect(() => {
@@ -632,14 +650,21 @@ export default function App() {
         }
         return saved;
       } catch {
-        // Firestore 실패 시 pendingReadingRecords에 보관 (로그아웃해도 유지, 재로그인 시 동기화)
-        const pendingItem = { ...record, _userId: currentUser.id };
+        // 낙관적 UI: 로컬에 즉시 반영하고 백그라운드에서 나중에 sync
+        const _tempId = `pending_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        const localItem = { ...record, _pending: true, _tempId };
+        const pendingItem = { ...record, _userId: currentUser.id, _tempId };
+        setReadingRecords(prev => {
+          const updated = [...prev, localItem];
+          AsyncStorage.setItem('readingRecords', JSON.stringify(updated)).catch(() => {});
+          return updated;
+        });
         try {
           const raw = await AsyncStorage.getItem('pendingReadingRecords');
           const existing = raw ? JSON.parse(raw) : [];
           await AsyncStorage.setItem('pendingReadingRecords', JSON.stringify([...existing, pendingItem]));
         } catch {}
-        return false;
+        return localItem;
       }
     }
     // 비로그인 상태: 로컬에만 저장
@@ -950,7 +975,6 @@ export default function App() {
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0]?.totalPages ?? 0;
   };
 
-  const currentReadingBookTotalPages = getBookTotalPages(currentReadingBook);
 
   // Handle book press from recent books or search results
   const handleRecentBookPress = (book) => {
@@ -1241,7 +1265,7 @@ export default function App() {
         return (
           <SafeAreaProvider>
             <TermsAgreementScreen
-              onNext={async ({ agreedTerms }) => {
+              onNext={async () => {
                 try {
                   // Register user with nickname
                   const userData = await registerUser(signUpUserInfo, signUpNickname);

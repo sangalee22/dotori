@@ -1,5 +1,22 @@
 import React from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, Modal, ScrollView, KeyboardAvoidingView, ActivityIndicator, Platform, Animated, Easing, PanResponder, Pressable, AppState, Keyboard } from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet, Modal, ScrollView, KeyboardAvoidingView, ActivityIndicator, Platform, Animated, Easing, PanResponder, Pressable, AppState, Keyboard, NativeModules } from 'react-native';
+
+// iOS Live Activity (Dynamic Island + 잠금화면 타이머) 헬퍼
+const _liveActivityModule = Platform.OS === 'ios' ? NativeModules.LiveActivityModule : null;
+const LiveActivity = {
+  start: (bookTitle, timerStartTimestamp, elapsedSeconds) => {
+    _liveActivityModule?.startActivity?.({ bookTitle: bookTitle ?? '독서 중', timerStartTimestamp, elapsedSeconds });
+  },
+  pause: (elapsedSeconds) => {
+    _liveActivityModule?.updateActivity?.({ isPlaying: false, elapsedSeconds, timerStartTimestamp: Date.now() / 1000 });
+  },
+  resume: (timerStartTimestamp, elapsedSeconds) => {
+    _liveActivityModule?.updateActivity?.({ isPlaying: true, timerStartTimestamp, elapsedSeconds });
+  },
+  end: () => {
+    _liveActivityModule?.endActivity?.();
+  },
+};
 import { BlurView } from 'expo-blur';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { saveCardImage, captureCard } from '../utils/imageSave';
@@ -420,6 +437,8 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
   const onUpdateReadingRef = React.useRef(onUpdateReading);
   onUpdateReadingRef.current = onUpdateReading;
   const [timerBook, setTimerBook] = React.useState(null);
+  const timerBookRef = React.useRef(timerBook);
+  React.useEffect(() => { timerBookRef.current = timerBook; }, [timerBook]);
   React.useEffect(() => { onActiveTimerChange?.(timerBook?.isbn ?? null); }, [timerBook]);
   const [timerBookTotalPages, setTimerBookTotalPages] = React.useState(0);
   const [manualResultBook, setManualResultBook] = React.useState(null);
@@ -448,6 +467,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
         setElapsed(0);
         elapsedBaseRef.current = 0;
         sessionStartTsRef.current = null;
+        LiveActivity.end();
         AsyncStorage.removeItem('timerState').catch(() => {});
         AsyncStorage.removeItem('timerPendingState').catch(() => {});
         setIsModalOpen(false);
@@ -526,6 +546,10 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
         selectedBookTotalPages,
         readingStartTime: readingStartTime?.toISOString() ?? null,
       })).catch(() => {});
+      // Live Activity 시작/재개: timerStartTimestamp = 가상 시작 시각(초)
+      const timerStartTimestamp = sessionStartTsRef.current / 1000 - elapsedBaseRef.current;
+      const book = timerBookRef.current;
+      LiveActivity.start(book?.title ?? '독서 중', timerStartTimestamp, elapsedBaseRef.current);
     } else {
       clearInterval(timerRef.current);
       if (sessionStartTsRef.current) {
@@ -545,6 +569,8 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
           selectedBookTotalPages,
           readingStartTime: readingStartTime?.toISOString() ?? null,
         })).catch(() => {});
+        // Live Activity 일시정지 상태로 업데이트
+        LiveActivity.pause(elapsedBaseRef.current);
       }
     }
     return () => clearInterval(timerRef.current);
@@ -775,6 +801,7 @@ export default function BottomNavigation({ activeTab = 'home', onTabPress, curre
     setElapsed(0);
     elapsedBaseRef.current = 0;
     sessionStartTsRef.current = null;
+    LiveActivity.end();
     AsyncStorage.removeItem('timerState').catch(() => {});
     AsyncStorage.removeItem('timerPendingState').catch(() => {});
     setIsModalOpen(false);
